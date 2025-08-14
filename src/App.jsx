@@ -9,7 +9,7 @@ import RebalancePlan from "./components/RebalancePlan.jsx";
 import ConfigPage from "./components/ConfigPage.jsx";
 import { mkAsset, stripIds, formatCurrency, mkId, labelFor } from "./utils.js";
 import { defaultAssetTypes, netWorth, rebalanceWithNewCapital, buildSeries } from "./data.js";
-import { pickFile, getSavedFile, readPortfolioFile, writePortfolioFile } from "./file.js";
+import { openExistingFile, createNewFile, getSavedFile, readPortfolioFile, writePortfolioFile } from "./file.js";
 
 export default function App() {
   const [password, setPassword] = useState("");
@@ -88,9 +88,19 @@ export default function App() {
     setAssetsAndSnapshot([...assets, asset]);
   }
 
-  async function handlePickFile() {
+  async function handleOpenExisting() {
     try {
-      const h = await pickFile();
+      const h = await openExistingFile();
+      setFileHandle(h);
+      setStep("password");
+    } catch (e) {
+      setError(e && e.message ? e.message : String(e));
+    }
+  }
+
+  async function handleCreateNew() {
+    try {
+      const h = await createNewFile();
       setFileHandle(h);
       setStep("password");
     } catch (e) {
@@ -102,7 +112,12 @@ export default function App() {
     if (!fileHandle || !password) return setError("Pick a file and enter password first.");
     setLoading(true); setError(null);
     try {
+      const file = await fileHandle.getFile();
+      const isEmpty = file.size === 0;
       const data = await readPortfolioFile(fileHandle, password);
+      if (isEmpty) {
+        await writePortfolioFile(fileHandle, password, data);
+      }
       const snaps = data.snapshots || [];
       setSnapshots(snaps);
       const latest = snaps[snaps.length - 1];
@@ -159,8 +174,10 @@ export default function App() {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       {step === "pick" && (
-        <div className="min-h-screen flex items-center justify-center p-6">
-          <button onClick={handlePickFile} className="h-12 px-6 rounded-lg bg-blue-600 hover:bg-blue-500">Select or create file</button>
+        <div className="min-h-screen flex flex-col items-center justify-center p-6 gap-4">
+          <button onClick={handleOpenExisting} className="h-12 px-6 rounded-lg bg-blue-600 hover:bg-blue-500">Open existing file</button>
+          <button onClick={handleCreateNew} className="h-12 px-6 rounded-lg bg-blue-600 hover:bg-blue-500">Create new file</button>
+          <a href="/sample-portfolio.enc" download className="text-sm text-blue-400 underline">Download sample file</a>
         </div>
       )}
       {step === "password" && (
