@@ -2,10 +2,12 @@ import React, { useEffect, useMemo, useState } from "react";
 import Section from "./components/Section.jsx";
 import TextInput from "./components/TextInput.jsx";
 import LineChart from "./components/LineChart.jsx";
-import AssetList from "./components/AssetList.jsx";
+import AssetTable from "./components/AssetTable.jsx";
+import AddAssetModal from "./components/AddAssetModal.jsx";
+import HistorySidebar from "./components/HistorySidebar.jsx";
 import RebalancePlan from "./components/RebalancePlan.jsx";
 import ConfigPage from "./components/ConfigPage.jsx";
-import { mkAsset, stripIds, formatCurrency, mkId } from "./utils.js";
+import { mkAsset, stripIds, formatCurrency, mkId, labelFor } from "./utils.js";
 import { defaultAssetTypes, netWorth, rebalanceWithNewCapital, buildSeries } from "./data.js";
 import { pickFile, getSavedFile, readPortfolioFile, writePortfolioFile } from "./file.js";
 
@@ -13,12 +15,12 @@ export default function App() {
   const [password, setPassword] = useState("");
   const [fileHandle, setFileHandle] = useState(null);
   const [snapshots, setSnapshots] = useState([]);
-  const [asOf, setAsOf] = useState(() => new Date().toISOString().slice(0, 10));
+  const [currentIndex, setCurrentIndex] = useState(0);
   const [assetTypes, setAssetTypes] = useState(defaultAssetTypes);
   const [assets, setAssets] = useState([
-    mkAsset("cash", defaultAssetTypes),
-    mkAsset("real_estate", defaultAssetTypes),
-    mkAsset("stock", defaultAssetTypes),
+    mkAsset("cash", defaultAssetTypes, "Cash"),
+    mkAsset("real_estate", defaultAssetTypes, "Real estate"),
+    mkAsset("stock", defaultAssetTypes, "Stock"),
   ]);
   const [allocation, setAllocation] = useState({ cash: 20, real_estate: 50, stock: 30 });
   const [newCapital, setNewCapital] = useState(0);
@@ -27,6 +29,7 @@ export default function App() {
   const [period, setPeriod] = useState("monthly");
   const [step, setStep] = useState("pick");
   const [configOpen, setConfigOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -45,12 +48,45 @@ export default function App() {
     })();
   }, []);
 
+  useEffect(() => {
+    snapshotFromAssets(assets);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const totalNow = useMemo(() => netWorth(assets), [assets]);
   const series = useMemo(() => buildSeries(snapshots, period), [snapshots, period]);
   const rebalance = useMemo(
     () => rebalanceWithNewCapital(assets, allocation, newCapital || 0),
     [assets, allocation, newCapital]
   );
+  const prevAssets = useMemo(() => (currentIndex > 0 ? snapshots[currentIndex - 1]?.assets || [] : []), [snapshots, currentIndex]);
+
+  function snapshotFromAssets(nextAssets) {
+    setSnapshots((prev) => {
+      const snap = { asOf: new Date().toISOString(), assets: nextAssets.map(stripIds) };
+      const s = [...prev, snap];
+      setCurrentIndex(s.length - 1);
+      return s;
+    });
+  }
+
+  function setAssetsAndSnapshot(next) {
+    setAssets(next);
+    snapshotFromAssets(next);
+  }
+
+  function handleSelectSnapshot(i) {
+    const snap = snapshots[i];
+    if (!snap) return;
+    setCurrentIndex(i);
+    setAssets((snap.assets || []).map((a) => ({ ...a, id: mkId(), name: a.name || labelFor(a.type, assetTypes) })));
+  }
+
+  function handleAddAsset({ name, type, value }) {
+    const asset = mkAsset(type, assetTypes, name);
+    asset.value = value;
+    setAssetsAndSnapshot([...assets, asset]);
+  }
 
   async function handlePickFile() {
     try {
@@ -71,7 +107,10 @@ export default function App() {
       setSnapshots(snaps);
       const latest = snaps[snaps.length - 1];
       if (latest) {
-        setAssets((latest.assets || []).map((a) => ({ ...a, id: mkId() })));
+        setAssets((latest.assets || []).map((a) => ({ ...a, id: mkId(), name: a.name || labelFor(a.type, assetTypes) })));
+        setCurrentIndex(snaps.length - 1);
+      } else {
+        snapshotFromAssets(assets);
       }
       setAllocation(data.allocation || {});
       setAssetTypes(data.assetTypes || defaultAssetTypes);
@@ -85,12 +124,9 @@ export default function App() {
     if (!fileHandle || !password) return setError("Pick a file and enter password first.");
     setLoading(true); setError(null);
     try {
-      const snap = { asOf, assets: assets.map(stripIds) };
-      const nextSnapshots = [...snapshots, snap];
-      const data = { version: 1, assetTypes, allocation, snapshots: nextSnapshots };
+      const data = { version: 1, assetTypes, allocation, snapshots };
       await writePortfolioFile(fileHandle, password, data);
-      setSnapshots(nextSnapshots);
-      alert("Saved snapshot");
+      alert("Saved file");
     } catch (e) {
       setError(e && e.message ? e.message : String(e));
     } finally { setLoading(false); }
@@ -105,13 +141,15 @@ export default function App() {
       setFileHandle(null);
       setPassword("");
       setSnapshots([]);
-      setAssets([
-        mkAsset("cash", defaultAssetTypes),
-        mkAsset("real_estate", defaultAssetTypes),
-        mkAsset("stock", defaultAssetTypes),
-      ]);
+      setCurrentIndex(0);
+      const initialAssets = [
+        mkAsset("cash", defaultAssetTypes, "Cash"),
+        mkAsset("real_estate", defaultAssetTypes, "Real estate"),
+        mkAsset("stock", defaultAssetTypes, "Stock"),
+      ];
+      setAssets(initialAssets);
+      snapshotFromAssets(initialAssets);
       setAllocation({ cash: 20, real_estate: 50, stock: 30 });
-      setAsOf(new Date().toISOString().slice(0, 10));
       setStep("pick");
     } catch (e) {
       setError(e && e.message ? e.message : String(e));
@@ -134,6 +172,7 @@ export default function App() {
         </div>
       )}
       {step === "main" && (
+        <>
         <div className="max-w-6xl mx-auto p-6 space-y-6">
           <header className="flex items-center justify-between">
             <div>
@@ -149,15 +188,7 @@ export default function App() {
           {error && <div className="p-3 rounded-xl bg-red-900/30 border border-red-800 text-red-200">{error}</div>}
           {loading && <div className="p-3 rounded-xl bg-zinc-800 text-zinc-300">Working…</div>}
 
-          <div className="flex justify-end">
-            <button onClick={handleSaveNew} className="h-10 px-3 rounded-lg bg-blue-600 hover:bg-blue-500">Save snapshot</button>
-          </div>
-
           <div className="grid md:grid-cols-3 gap-6">
-            <Section title="As of date">
-              <TextInput label="Date" type="date" value={asOf} onChange={setAsOf} />
-            </Section>
-
             <Section title="Net worth (current)">
               <div className="text-3xl font-semibold">{formatCurrency(totalNow)}</div>
               <div className="text-xs text-zinc-400 mt-1">Computed from asset list</div>
@@ -175,7 +206,13 @@ export default function App() {
 
           <div className="grid lg:grid-cols-2 gap-6">
             <Section title="Assets">
-              <AssetList assets={assets} setAssets={setAssets} assetTypes={assetTypes} />
+              <AssetTable
+                assets={assets}
+                prevAssets={prevAssets}
+                setAssets={setAssetsAndSnapshot}
+                assetTypes={assetTypes}
+                readOnly={currentIndex !== snapshots.length - 1}
+              />
             </Section>
 
             <Section title="Rebalance">
@@ -187,20 +224,18 @@ export default function App() {
             </Section>
           </div>
 
-          <Section title="Loaded snapshots">
-            {snapshots.length === 0 ? (
-              <div className="text-zinc-400 text-sm">None yet. Create your first snapshot above.</div>
-            ) : (
-              <ul className="text-sm max-h-48 overflow-auto space-y-1">
-                {snapshots.map((s, i) => (
-                  <li key={i} className="text-zinc-300">
-                    {new Date(s.asOf).toISOString().slice(0, 10)} — {formatCurrency(netWorth(s.assets || []))}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Section>
         </div>
+        <AddAssetModal open={addOpen} onClose={() => setAddOpen(false)} assetTypes={assetTypes} onAdd={handleAddAsset} />
+        <HistorySidebar snapshots={snapshots} currentIndex={currentIndex} onSelect={handleSelectSnapshot} />
+        {currentIndex === snapshots.length - 1 && (
+          <button
+            onClick={() => setAddOpen(true)}
+            className="fixed bottom-6 right-6 h-12 w-12 rounded-full bg-blue-600 hover:bg-blue-500 text-white text-3xl leading-none"
+          >
+            +
+          </button>
+        )}
+        </>
       )}
 
       {configOpen && (
