@@ -302,7 +302,7 @@ function Section({ title, children, right }) {
   );
 }
 
-function TextInput({ label, value, onChange, type = "text", placeholder = "", className = "" }) {
+function TextInput({ label, value, onChange, type = "text", placeholder = "", className = "", disabled = false }) {
   return (
     <label className={`block text-sm ${className}`}>
       <span className="text-zinc-400">{label}</span>
@@ -311,6 +311,7 @@ function TextInput({ label, value, onChange, type = "text", placeholder = "", cl
         value={value}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
         className="mt-1 w-full rounded-lg bg-zinc-900 border border-zinc-800 px-3 py-2 text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
     </label>
@@ -325,24 +326,28 @@ function AddBtn({ onClick, children }) {
   );
 }
 
-function labelFor(key) {
-  const map = {
-    cash: "Cash",
-    real_estate: "Real estate",
-    stocks: "Stocks",
-    private_company_share: "Private company share",
-  };
-  return map[key] || key;
+function labelFor(key, types) {
+  return types[key]?.label || key;
 }
 
 function mkId() { return Math.random().toString(36).slice(2); }
-function mkCash() { return { id: mkId(), type: "cash", currency: "EUR", value: 0 }; }
-function mkRE() { return { id: mkId(), type: "real_estate", description: "", value: 0 }; }
-function mkStock() { return { id: mkId(), type: "stock", ticker: "", value: 0 }; }
-function mkPriv() { return { id: mkId(), type: "private_company_share", company: "", value: 0 }; }
+
+function mkAsset(type, registry) {
+  const def = registry[type] || { fields: [] };
+  const out = { id: mkId(), type, value: 0 };
+  for (const f of def.fields) out[f.key] = f.default || "";
+  return out;
+}
+
 function stripIds(a) { const { id, ...rest } = a; return rest; }
 
-function AssetList({ assets, setAssets }) {
+const defaultAssetTypes = {
+  cash: { label: "Cash", fields: [{ key: "currency", label: "Currency", default: "EUR" }] },
+  real_estate: { label: "Real estate", fields: [{ key: "description", label: "Description" }] },
+  stock: { label: "Stock", fields: [{ key: "ticker", label: "Ticker" }] },
+  private_company_share: { label: "Private company share", fields: [{ key: "company", label: "Company" }] },
+};
+function AssetList({ assets, setAssets, assetTypes }) {
   function update(id, patch) {
     setAssets(assets.map((a) => (a.id === id ? ({ ...a, ...patch }) : a)));
   }
@@ -351,62 +356,131 @@ function AssetList({ assets, setAssets }) {
   function add(type) {
     setAssets([
       ...assets,
-      type === "cash" ? mkCash() : type === "real_estate" ? mkRE() : type === "stock" ? mkStock() : mkPriv()
+      mkAsset(type, assetTypes)
     ]);
+  }
+
+  function changeType(id, type) {
+    setAssets(assets.map((a) => {
+      if (a.id !== id) return a;
+      const repl = mkAsset(type, assetTypes);
+      return { ...repl, id: a.id, value: a.value };
+    }));
   }
 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap gap-2">
-        <AddBtn onClick={() => add("cash")}>Add Cash</AddBtn>
-        <AddBtn onClick={() => add("real_estate")}>Add Real Estate</AddBtn>
-        <AddBtn onClick={() => add("stock")}>Add Stock</AddBtn>
-        <AddBtn onClick={() => add("private_company_share")}>Add Private Co. Share</AddBtn>
+        {Object.entries(assetTypes).map(([k, def]) => (
+          <AddBtn key={k} onClick={() => add(k)}>Add {def.label}</AddBtn>
+        ))}
       </div>
       <div className="space-y-2">
-        {assets.map((a) => (
-          <div key={a.id} className="grid md:grid-cols-12 gap-2 items-end bg-zinc-900/60 border border-zinc-800 rounded-xl p-3">
-            <div className="md:col-span-2">
-              <label className="text-xs text-zinc-400">Type</label>
-              <select
-                className="mt-1 w-full rounded-lg bg-zinc-900 border border-zinc-800 px-3 py-2 text-zinc-100"
-                value={a.type}
-                onChange={(e) => update(a.id, { type: e.target.value })}
-              >
-                <option value="cash">Cash</option>
-                <option value="real_estate">Real estate</option>
-                <option value="stock">Stock</option>
-                <option value="private_company_share">Private company share</option>
-              </select>
+        {assets.map((a) => {
+          const def = assetTypes[a.type] || { fields: [] };
+          return (
+            <div key={a.id} className="grid md:grid-cols-12 gap-2 items-end bg-zinc-900/60 border border-zinc-800 rounded-xl p-3">
+              <div className="md:col-span-2">
+                <label className="text-xs text-zinc-400">Type</label>
+                <select
+                  className="mt-1 w-full rounded-lg bg-zinc-900 border border-zinc-800 px-3 py-2 text-zinc-100"
+                  value={a.type}
+                  onChange={(e) => changeType(a.id, e.target.value)}
+                >
+                  {!assetTypes[a.type] && <option value={a.type}>{a.type}</option>}
+                  {Object.entries(assetTypes).map(([k, d]) => (
+                    <option key={k} value={k}>{d.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              {def.fields.map((f) => (
+                <TextInput
+                  key={f.key}
+                  className="md:col-span-3"
+                  label={f.label}
+                  value={a[f.key] || ""}
+                  onChange={(v) => update(a.id, { [f.key]: v })}
+                />
+              ))}
+
+              <TextInput className="md:col-span-3" label="Value" type="number" value={String(a.value)} onChange={(v) => update(a.id, { value: Number(v || 0) })} />
+
+              <div className="md:col-span-1 flex justify-end">
+                <button onClick={() => remove(a.id)} className="h-10 px-3 rounded-lg bg-zinc-800 border border-zinc-700 hover:bg-zinc-700">Remove</button>
+              </div>
             </div>
-
-            {a.type === "cash" && (
-              <TextInput className="md:col-span-3" label="Currency" value={a.currency} onChange={(v) => update(a.id, { currency: v })} />
-            )}
-            {a.type === "real_estate" && (
-              <TextInput className="md:col-span-5" label="Description" value={a.description} onChange={(v) => update(a.id, { description: v })} />
-            )}
-            {a.type === "stock" && (
-              <TextInput className="md:col-span-3" label="Ticker" value={a.ticker} onChange={(v) => update(a.id, { ticker: v })} />
-            )}
-            {a.type === "private_company_share" && (
-              <TextInput className="md:col-span-4" label="Company" value={a.company} onChange={(v) => update(a.id, { company: v })} />
-            )}
-
-            <TextInput className="md:col-span-3" label="Value" type="number" value={String(a.value)} onChange={(v) => update(a.id, { value: Number(v || 0) })} />
-
-            <div className="md:col-span-1 flex justify-end">
-              <button onClick={() => remove(a.id)} className="h-10 px-3 rounded-lg bg-zinc-800 border border-zinc-700 hover:bg-zinc-700">Remove</button>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
 }
 
-function AllocationEditor({ allocation, setAllocation }) {
-  const keys = Array.from(new Set(["cash", "real_estate", "stocks", "private_company_share", ...Object.keys(allocation || {})]));
+function AssetTypeManager({ assetTypes, setAssetTypes }) {
+  function updateLabel(k, label) {
+    setAssetTypes({ ...assetTypes, [k]: { ...assetTypes[k], label } });
+  }
+  function updateFieldKey(typeKey, idx, value) {
+    const t = assetTypes[typeKey];
+    const fields = t.fields.map((f, i) => (i === idx ? { ...f, key: value } : f));
+    setAssetTypes({ ...assetTypes, [typeKey]: { ...t, fields } });
+  }
+  function updateFieldLabel(typeKey, idx, value) {
+    const t = assetTypes[typeKey];
+    const fields = t.fields.map((f, i) => (i === idx ? { ...f, label: value } : f));
+    setAssetTypes({ ...assetTypes, [typeKey]: { ...t, fields } });
+  }
+  function addType() {
+    const key = window.prompt("New type key", "new_type");
+    if (key && !assetTypes[key]) setAssetTypes({ ...assetTypes, [key]: { label: key, fields: [] } });
+  }
+  function removeType(key) {
+    const { [key]: _discard, ...rest } = assetTypes;
+    setAssetTypes(rest);
+  }
+  function addField(typeKey) {
+    const key = window.prompt("Field key", "field");
+    const label = window.prompt("Field label", "Field");
+    if (key && label) {
+      const t = assetTypes[typeKey];
+      setAssetTypes({ ...assetTypes, [typeKey]: { ...t, fields: [...t.fields, { key, label }] } });
+    }
+  }
+  function removeField(typeKey, idx) {
+    const t = assetTypes[typeKey];
+    const fields = t.fields.filter((_, i) => i !== idx);
+    setAssetTypes({ ...assetTypes, [typeKey]: { ...t, fields } });
+  }
+
+  return (
+    <div className="space-y-4">
+      {Object.entries(assetTypes).map(([k, def]) => (
+        <div key={k} className="border border-zinc-800 bg-zinc-900/60 rounded-xl p-3 space-y-2">
+          <div className="flex items-end gap-2">
+            <TextInput label="Type" value={k} onChange={() => {}} disabled className="md:col-span-3" />
+            <TextInput label="Label" value={def.label} onChange={(v) => updateLabel(k, v)} className="md:col-span-3" />
+            <div className="flex-1 text-right">
+              <button onClick={() => removeType(k)} className="h-10 px-3 rounded-lg bg-zinc-800 border border-zinc-700 hover:bg-zinc-700">Delete</button>
+            </div>
+          </div>
+          {def.fields.map((f, i) => (
+            <div key={i} className="flex items-end gap-2">
+              <TextInput label="Field key" value={f.key} onChange={(v) => updateFieldKey(k, i, v)} />
+              <TextInput label="Field label" value={f.label} onChange={(v) => updateFieldLabel(k, i, v)} />
+              <button onClick={() => removeField(k, i)} className="h-10 px-3 rounded-lg bg-zinc-800 border border-zinc-700 hover:bg-zinc-700">Remove</button>
+            </div>
+          ))}
+          <button onClick={() => addField(k)} className="px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 text-sm">Add field</button>
+        </div>
+      ))}
+      <AddBtn onClick={addType}>Add type</AddBtn>
+    </div>
+  );
+}
+
+function AllocationEditor({ allocation, setAllocation, assetTypes }) {
+  const keys = Array.from(new Set([...Object.keys(assetTypes), ...Object.keys(allocation || {})]));
   const total = Object.values(allocation || {}).reduce((a, b) => a + (Number(b) || 0), 0);
   function setKey(k, v) { setAllocation({ ...allocation, [k]: v }); }
   function remove(k) { const { [k]: _discard, ...rest } = allocation; setAllocation(rest); }
@@ -416,7 +490,7 @@ function AllocationEditor({ allocation, setAllocation }) {
     <div className="space-y-2">
       {keys.map((k) => (
         <div key={k} className="grid grid-cols-12 items-end gap-2">
-          <div className="col-span-6 text-zinc-300">{labelFor(k)}</div>
+          <div className="col-span-6 text-zinc-300">{labelFor(k, assetTypes)}</div>
           <div className="col-span-4">
             <TextInput label="Target %" type="number" value={String(allocation[k] ?? 0)} onChange={(v) => setKey(k, Number(v || 0))} />
           </div>
@@ -433,7 +507,7 @@ function AllocationEditor({ allocation, setAllocation }) {
   );
 }
 
-function RebalancePlan({ data }) {
+function RebalancePlan({ data, assetTypes }) {
   const cats = Object.keys(data.investPlan || {}).sort();
   if (cats.length === 0) return null;
   return (
@@ -451,7 +525,7 @@ function RebalancePlan({ data }) {
         <tbody>
           {cats.map((c) => (
             <tr key={c} className="border-t border-zinc-800">
-              <td className="py-1 text-zinc-200">{labelFor(c)}</td>
+              <td className="py-1 text-zinc-200">{labelFor(c, assetTypes)}</td>
               <td className="py-1 text-right text-zinc-300">{formatCurrency(data.byCat[c] || 0)}</td>
               <td className="py-1 text-right text-zinc-300">{formatCurrency(data.idealByCat[c] || 0)}</td>
               <td className="py-1 text-right font-medium text-zinc-100">{formatCurrency(data.investPlan[c] || 0)}</td>
@@ -488,8 +562,13 @@ export default function App() {
   const [dir, setDir] = useState(null);
   const [snapshots, setSnapshots] = useState([]);
   const [asOf, setAsOf] = useState(() => new Date().toISOString().slice(0, 10));
-  const [assets, setAssets] = useState([mkCash(), mkRE(), mkStock()]);
-  const [allocation, setAllocation] = useState({ cash: 20, real_estate: 50, stocks: 30 });
+  const [assetTypes, setAssetTypes] = useState(defaultAssetTypes);
+  const [assets, setAssets] = useState([
+    mkAsset("cash", defaultAssetTypes),
+    mkAsset("real_estate", defaultAssetTypes),
+    mkAsset("stock", defaultAssetTypes),
+  ]);
+  const [allocation, setAllocation] = useState({ cash: 20, real_estate: 50, stock: 30 });
   const [newCapital, setNewCapital] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -528,6 +607,12 @@ export default function App() {
     try {
       const snaps = await readAllSnapshots(dir, password);
       setSnapshots(snaps);
+      const latest = snaps[snaps.length - 1];
+      if (latest) {
+        setAssets((latest.assets || []).map((a) => ({ ...a, id: mkId() })));
+        setAllocation(latest.allocation || {});
+        setAssetTypes(latest.assetTypes || defaultAssetTypes);
+      }
     } catch (e) {
       setError(e && e.message ? e.message : String(e));
     } finally { setLoading(false); }
@@ -537,7 +622,7 @@ export default function App() {
     if (!dir || !password) return setError("Pick a folder and enter password first.");
     setLoading(true); setError(null);
     try {
-      const snap = { asOf, assets: assets.map(stripIds), allocation };
+      const snap = { asOf, assets: assets.map(stripIds), allocation, assetTypes };
       const name = await writeSnapshot(dir, password, snap);
       const snaps = await readAllSnapshots(dir, password);
       setSnapshots(snaps);
@@ -586,18 +671,22 @@ export default function App() {
           </Section>
         </div>
 
+        <Section title="Asset Types">
+          <AssetTypeManager assetTypes={assetTypes} setAssetTypes={setAssetTypes} />
+        </Section>
+
         <div className="grid lg:grid-cols-2 gap-6">
           <Section title="Assets">
-            <AssetList assets={assets} setAssets={setAssets} />
+            <AssetList assets={assets} setAssets={setAssets} assetTypes={assetTypes} />
           </Section>
 
           <Section title="Allocation & Rebalance">
-            <AllocationEditor allocation={allocation} setAllocation={setAllocation} />
+            <AllocationEditor allocation={allocation} setAllocation={setAllocation} assetTypes={assetTypes} />
             <div className="mt-4 grid grid-cols-2 gap-4">
               <TextInput label="New capital to invest" type="number" value={String(newCapital)} onChange={(v) => setNewCapital(Number(v || 0))} />
               <div className="text-sm text-zinc-400 flex items-end">Distribute this to move toward target without selling.</div>
             </div>
-            <RebalancePlan data={rebalance} />
+            <RebalancePlan data={rebalance} assetTypes={assetTypes} />
           </Section>
         </div>
 
