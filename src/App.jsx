@@ -518,6 +518,19 @@ function RebalancePlan({ data, assetTypes }) {
   );
 }
 
+function ConfigPage({ assetTypes, setAssetTypes, allocation, setAllocation }) {
+  return (
+    <div className="space-y-6">
+      <Section title="Asset Types">
+        <AssetTypeManager assetTypes={assetTypes} setAssetTypes={setAssetTypes} />
+      </Section>
+      <Section title="Allocation">
+        <AllocationEditor allocation={allocation} setAllocation={setAllocation} assetTypes={assetTypes} />
+      </Section>
+    </div>
+  );
+}
+
 function buildSeries(snaps, period) {
   const pts = (snaps || []).map((s) => ({ date: new Date(s.asOf), value: netWorth(s.assets || []) }));
   const grouped = groupByPeriod(pts, period);
@@ -554,6 +567,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [period, setPeriod] = useState("monthly");
+  const [page, setPage] = useState("main");
 
   useEffect(() => {
     (async () => {
@@ -628,64 +642,65 @@ export default function App() {
             <button onClick={handlePickFile} className="h-10 px-3 rounded-lg bg-zinc-800 border border-zinc-700 hover:bg-zinc-700">{fileHandle ? "Change File" : "Choose File"}</button>
             <button onClick={handleLoad} className="h-10 px-3 rounded-lg bg-zinc-800 border border-zinc-700 hover:bg-zinc-700">Load</button>
             <button onClick={handleSaveNew} className="h-10 px-3 rounded-lg bg-blue-600 hover:bg-blue-500">Save snapshot</button>
+            <button onClick={() => setPage(page === "main" ? "config" : "main")} className="h-10 px-3 rounded-lg bg-zinc-800 border border-zinc-700 hover:bg-zinc-700">{page === "main" ? "Config" : "Back"}</button>
           </div>
         </header>
 
         {error && <div className="p-3 rounded-xl bg-red-900/30 border border-red-800 text-red-200">{error}</div>}
         {loading && <div className="p-3 rounded-xl bg-zinc-800 text-zinc-300">Working…</div>}
+        {page === "main" ? (
+          <>
+            <div className="grid md:grid-cols-3 gap-6">
+              <Section title="As of date">
+                <TextInput label="Date" type="date" value={asOf} onChange={setAsOf} />
+              </Section>
 
-        <div className="grid md:grid-cols-3 gap-6">
-          <Section title="As of date">
-            <TextInput label="Date" type="date" value={asOf} onChange={setAsOf} />
-          </Section>
+              <Section title="Net worth (current)">
+                <div className="text-3xl font-semibold">{formatCurrency(totalNow)}</div>
+                <div className="text-xs text-zinc-400 mt-1">Computed from asset list</div>
+              </Section>
 
-          <Section title="Net worth (current)">
-            <div className="text-3xl font-semibold">{formatCurrency(totalNow)}</div>
-            <div className="text-xs text-zinc-400 mt-1">Computed from asset list</div>
-          </Section>
-
-          <Section title="History view" right={
-            <select value={period} onChange={(e) => setPeriod(e.target.value)} className="bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1 text-sm">
-              <option value="monthly">Monthly</option>
-              <option value="yearly">Yearly</option>
-            </select>
-          }>
-            <LineChart data={series} />
-          </Section>
-        </div>
-
-        <Section title="Asset Types">
-          <AssetTypeManager assetTypes={assetTypes} setAssetTypes={setAssetTypes} />
-        </Section>
-
-        <div className="grid lg:grid-cols-2 gap-6">
-          <Section title="Assets">
-            <AssetList assets={assets} setAssets={setAssets} assetTypes={assetTypes} />
-          </Section>
-
-          <Section title="Allocation & Rebalance">
-            <AllocationEditor allocation={allocation} setAllocation={setAllocation} assetTypes={assetTypes} />
-            <div className="mt-4 grid grid-cols-2 gap-4">
-              <TextInput label="New capital to invest" type="number" value={String(newCapital)} onChange={(v) => setNewCapital(Number(v || 0))} />
-              <div className="text-sm text-zinc-400 flex items-end">Distribute this to move toward target without selling.</div>
+              <Section title="History view" right={
+                <select value={period} onChange={(e) => setPeriod(e.target.value)} className="bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1 text-sm">
+                  <option value="monthly">Monthly</option>
+                  <option value="yearly">Yearly</option>
+                </select>
+              }>
+                <LineChart data={series} />
+              </Section>
             </div>
-            <RebalancePlan data={rebalance} assetTypes={assetTypes} />
-          </Section>
-        </div>
 
-        <Section title="Loaded snapshots">
-          {snapshots.length === 0 ? (
-            <div className="text-zinc-400 text-sm">None yet. Create your first snapshot above.</div>
-          ) : (
-            <ul className="text-sm max-h-48 overflow-auto space-y-1">
-              {snapshots.map((s, i) => (
-                <li key={i} className="text-zinc-300">
-                  {new Date(s.asOf).toISOString().slice(0, 10)} — {formatCurrency(netWorth(s.assets || []))}
-                </li>
-              ))}
-            </ul>
-          )}
-        </Section>
+            <div className="grid lg:grid-cols-2 gap-6">
+              <Section title="Assets">
+                <AssetList assets={assets} setAssets={setAssets} assetTypes={assetTypes} />
+              </Section>
+
+              <Section title="Rebalance">
+                <div className="grid grid-cols-2 gap-4">
+                  <TextInput label="New capital to invest" type="number" value={String(newCapital)} onChange={(v) => setNewCapital(Number(v || 0))} />
+                  <div className="text-sm text-zinc-400 flex items-end">Distribute this to move toward target without selling.</div>
+                </div>
+                <RebalancePlan data={rebalance} assetTypes={assetTypes} />
+              </Section>
+            </div>
+
+            <Section title="Loaded snapshots">
+              {snapshots.length === 0 ? (
+                <div className="text-zinc-400 text-sm">None yet. Create your first snapshot above.</div>
+              ) : (
+                <ul className="text-sm max-h-48 overflow-auto space-y-1">
+                  {snapshots.map((s, i) => (
+                    <li key={i} className="text-zinc-300">
+                      {new Date(s.asOf).toISOString().slice(0, 10)} — {formatCurrency(netWorth(s.assets || []))}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Section>
+          </>
+        ) : (
+          <ConfigPage assetTypes={assetTypes} setAssetTypes={setAssetTypes} allocation={allocation} setAllocation={setAllocation} />
+        )}
       </div>
     </div>
   );
