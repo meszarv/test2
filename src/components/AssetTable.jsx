@@ -72,7 +72,7 @@ export default function AssetTable({ assets, prevAssets, setAssets, assetTypes, 
             return (
               <tr key={a.id} className="border-t border-zinc-800" onDoubleClick={() => openFields(a)}>
                 <td className="p-2">{a.name}</td>
-                <td className="p-2">{assetTypes[a.type]?.label || a.type}</td>
+                <td className="p-2">{a.type}</td>
                 <td className="p-2">{desc}</td>
                 <td className="p-2 text-right">{formatCurrency(prev)}</td>
                 <td className="p-2 text-right">
@@ -116,21 +116,22 @@ export default function AssetTable({ assets, prevAssets, setAssets, assetTypes, 
       </table>
       {fieldEdit && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-zinc-900 rounded-xl p-4 w-full max-w-sm space-y-3">
+          <form onSubmit={(e) => { e.preventDefault(); saveFields(); }} className="bg-zinc-900 rounded-xl p-4 w-full max-w-sm space-y-3">
             <h2 className="text-lg font-medium">Edit {fieldEdit.name}</h2>
-            {(assetTypes[fieldEdit.type]?.fields || []).map((f) => (
+            {(assetTypes[fieldEdit.type]?.fields || []).map((f, i) => (
               <TextInput
                 key={f.key}
                 label={f.label}
                 value={fieldDraft[f.key] || ""}
                 onChange={(v) => setFieldDraft({ ...fieldDraft, [f.key]: v })}
+                autoFocus={i === 0}
               />
             ))}
             <div className="flex justify-end gap-2 pt-2">
-              <button onClick={() => setFieldEdit(null)} title="Close" className="px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 hover:bg-zinc-700">✖</button>
-              <button onClick={saveFields} title="Save" className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500">✔</button>
+              <button type="button" onClick={() => setFieldEdit(null)} title="Close" className="px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 hover:bg-zinc-700">✖</button>
+              <button type="submit" title="Save" className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500">✔</button>
             </div>
-          </div>
+          </form>
         </div>
       )}
       </>
