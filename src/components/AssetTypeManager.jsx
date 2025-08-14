@@ -4,20 +4,17 @@ export default function AssetTypeManager({ assetTypes, setAssetTypes, assets }) 
   function slugify(str) {
     return str.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
   }
-  function updateLabel(k, label) {
-    setAssetTypes({ ...assetTypes, [k]: { ...assetTypes[k], label } });
-  }
   function updateFieldLabel(typeKey, idx, value) {
     const t = assetTypes[typeKey];
     const fields = t.fields.map((f, i) => (i === idx ? { ...f, label: value } : f));
     setAssetTypes({ ...assetTypes, [typeKey]: { ...t, fields } });
   }
   function addType() {
-    const label = window.prompt("New type label", "New type");
+    const label = window.prompt("New type", "new_type");
     if (!label) return;
     const key = slugify(label);
     if (assetTypes[key]) return alert("Type exists");
-    setAssetTypes({ ...assetTypes, [key]: { label, fields: [] } });
+    setAssetTypes({ ...assetTypes, [key]: { fields: [] } });
   }
   function removeType(key) {
     if (assets && assets.some((a) => a.type === key)) {
@@ -47,7 +44,6 @@ export default function AssetTypeManager({ assetTypes, setAssetTypes, assets }) 
         <div key={k} className="border border-zinc-800 bg-zinc-900/60 rounded-xl p-3 space-y-2">
           <div className="flex items-end gap-2">
             <TextInput label="Type" value={k} onChange={() => {}} disabled className="md:col-span-3" />
-            <TextInput label="Label" value={def.label} onChange={(v) => updateLabel(k, v)} className="md:col-span-3" />
             <div className="flex-1 text-right">
               <button onClick={() => removeType(k)} title="Delete" className="h-10 w-10 rounded-lg bg-zinc-800 border border-zinc-700 hover:bg-zinc-700">🗑️</button>
             </div>

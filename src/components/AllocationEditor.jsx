@@ -10,7 +10,7 @@ export default function AllocationEditor({ allocation, setAllocation, assetTypes
     <div className="space-y-2">
       {keys.map((k) => (
         <div key={k} className="grid grid-cols-12 items-end gap-2">
-          <div className="col-span-6 text-zinc-300">{labelFor(k, assetTypes)}</div>
+          <div className="col-span-6 text-zinc-300">{labelFor(k)}</div>
           <div className="col-span-4">
             <TextInput label="Target %" type="number" value={String(allocation[k] ?? 0)} onChange={(v) => setKey(k, Number(v || 0))} />
           </div>

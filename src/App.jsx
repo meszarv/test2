@@ -61,9 +61,18 @@ export default function App() {
 
   function snapshotFromAssets(nextAssets, date = new Date()) {
     setSnapshots((prev) => {
-      const snap = { asOf: date.toISOString(), assets: nextAssets.map(stripIds) };
-      const s = [...prev, snap].sort((a, b) => new Date(a.asOf) - new Date(b.asOf));
-      setCurrentIndex(s.indexOf(snap));
+      const iso = date.toISOString();
+      const month = iso.slice(0, 7);
+      const snap = { asOf: iso, assets: nextAssets.map(stripIds) };
+      const existing = prev.findIndex((p) => p.asOf.slice(0, 7) === month);
+      let s;
+      if (existing >= 0) {
+        s = prev.map((p, i) => (i === existing ? snap : p));
+        setCurrentIndex(existing);
+      } else {
+        s = [...prev, snap].sort((a, b) => new Date(a.asOf) - new Date(b.asOf));
+        setCurrentIndex(s.indexOf(snap));
+      }
       return s;
     });
   }
@@ -77,7 +86,7 @@ export default function App() {
     const snap = snapshots[i];
     if (!snap) return;
     setCurrentIndex(i);
-    setAssets((snap.assets || []).map((a) => ({ ...a, id: mkId(), name: a.name || labelFor(a.type, assetTypes) })));
+    setAssets((snap.assets || []).map((a) => ({ ...a, id: mkId(), name: a.name || labelFor(a.type) })));
   }
 
   function handleAddAsset({ name, type, value, ...fields }) {
@@ -93,11 +102,33 @@ export default function App() {
 
   function handleChangeSnapshotDate(i, date) {
     setSnapshots((prev) => {
-      const updated = { ...prev[i], asOf: date.toISOString() };
+      const iso = date.toISOString();
+      const month = iso.slice(0, 7);
+      if (prev.some((s, idx) => idx !== i && s.asOf.slice(0, 7) === month)) {
+        alert("Snapshot already exists for this month");
+        return prev;
+      }
+      const updated = { ...prev[i], asOf: iso };
       const next = prev.map((s, idx) => (idx === i ? updated : s));
       const sorted = next.slice().sort((a, b) => new Date(a.asOf) - new Date(b.asOf));
       setCurrentIndex(sorted.indexOf(updated));
       return sorted;
+    });
+  }
+
+  function handleDeleteSnapshot(i) {
+    setSnapshots((prev) => {
+      const next = prev.filter((_, idx) => idx !== i);
+      let newIdx = currentIndex;
+      if (i === currentIndex) newIdx = Math.min(i, next.length - 1);
+      else if (i < currentIndex) newIdx = currentIndex - 1;
+      newIdx = Math.max(0, newIdx);
+      const snap = next[newIdx];
+      if (snap) {
+        setAssets((snap.assets || []).map((a) => ({ ...a, id: mkId(), name: a.name || labelFor(a.type) })));
+      }
+      setCurrentIndex(newIdx);
+      return next;
     });
   }
 
@@ -135,7 +166,7 @@ export default function App() {
       setSnapshots(snaps);
       const latest = snaps[snaps.length - 1];
       if (latest) {
-        setAssets((latest.assets || []).map((a) => ({ ...a, id: mkId(), name: a.name || labelFor(a.type, assetTypes) })));
+        setAssets((latest.assets || []).map((a) => ({ ...a, id: mkId(), name: a.name || labelFor(a.type) })));
         setCurrentIndex(snaps.length - 1);
       } else {
         snapshotFromAssets(assets);
@@ -202,12 +233,19 @@ export default function App() {
         </div>
       )}
       {step === "password" && (
-        <div className="max-w-md mx-auto p-6 space-y-4">
-          <TextInput label="Password" type="password" value={password} onChange={setPassword} className="w-full" />
+        <form onSubmit={(e) => { e.preventDefault(); handleLoad(); }} className="max-w-md mx-auto p-6 space-y-4">
+          <TextInput
+            label="Password"
+            type="password"
+            value={password}
+            onChange={setPassword}
+            className="w-full"
+            autoFocus
+          />
           <div className="flex justify-end">
-            <button onClick={handleLoad} className="h-10 px-3 rounded-lg bg-zinc-800 border border-zinc-700 hover:bg-zinc-700">Open</button>
+            <button type="submit" className="h-10 px-3 rounded-lg bg-zinc-800 border border-zinc-700 hover:bg-zinc-700">Open</button>
           </div>
-        </div>
+        </form>
       )}
       {step === "main" && (
         <>
@@ -234,7 +272,7 @@ export default function App() {
 
               <Section title="Rebalance">
                 <div className="text-sm text-zinc-400 mb-2">Cash above target allocation is distributed to under-allocated categories.</div>
-                <RebalancePlan data={rebalancePlanData} assetTypes={assetTypes} />
+                <RebalancePlan data={rebalancePlanData} />
               </Section>
 
               <Section title="History view" right={
@@ -254,6 +292,7 @@ export default function App() {
                 onSelect={handleSelectSnapshot}
                 onAdd={handleAddSnapshot}
                 onChangeDate={handleChangeSnapshotDate}
+                onDelete={handleDeleteSnapshot}
               />
               <AssetTable
                 assets={assets}

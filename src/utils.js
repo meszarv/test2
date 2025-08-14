@@ -2,13 +2,13 @@ export function mkId() {
   return Math.random().toString(36).slice(2);
 }
 
-export function labelFor(key, types) {
-  return types[key]?.label || key;
+export function labelFor(key) {
+  return key;
 }
 
 export function mkAsset(type, registry, name = "") {
   const def = registry[type] || { fields: [] };
-  const out = { id: mkId(), type, name: name || def.label || type, value: 0 };
+  const out = { id: mkId(), type, name: name || type, value: 0 };
   for (const f of def.fields) out[f.key] = f.default || "";
   return out;
 }

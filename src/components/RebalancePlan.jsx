@@ -1,6 +1,6 @@
 import { formatCurrency, labelFor } from "../utils.js";
 
-export default function RebalancePlan({ data, assetTypes }) {
+export default function RebalancePlan({ data }) {
   const cats = Object.keys(data.investPlan || {}).sort();
   if (cats.length === 0) return null;
   return (
@@ -18,7 +18,7 @@ export default function RebalancePlan({ data, assetTypes }) {
         <tbody>
           {cats.map((c) => (
             <tr key={c} className="border-t border-zinc-800">
-              <td className="py-1 text-zinc-200">{labelFor(c, assetTypes)}</td>
+              <td className="py-1 text-zinc-200">{labelFor(c)}</td>
               <td className="py-1 text-right text-zinc-300">{formatCurrency(data.byCat[c] || 0)}</td>
               <td className="py-1 text-right text-zinc-300">{formatCurrency(data.idealByCat[c] || 0)}</td>
               <td className="py-1 text-right font-medium text-zinc-100">{formatCurrency(data.investPlan[c] || 0)}</td>
