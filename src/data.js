@@ -2,7 +2,9 @@ export const defaultAssetTypes = {
   cash: { label: "Cash", fields: [{ key: "currency", label: "Currency", default: "EUR" }] },
   real_estate: { label: "Real estate", fields: [{ key: "description", label: "Description" }] },
   stock: { label: "Stock", fields: [{ key: "ticker", label: "Ticker" }] },
-  private_company_share: { label: "Private company share", fields: [{ key: "company", label: "Company" }] },
+  private_equity: { label: "Private equity", fields: [{ key: "company", label: "Company" }] },
+  bond: { label: "Bond", fields: [{ key: "issuer", label: "Issuer" }] },
+  commodity: { label: "Commodity", fields: [{ key: "description", label: "Description" }] },
 };
 
 export function netWorth(assets) {

@@ -1,3 +1,5 @@
+import { defaultAssetTypes } from "./data.js";
+
 const DB_NAME = "portfolio-tracker-db";
 const STORE = "handles";
 
@@ -89,7 +91,7 @@ function equalBytes(a, b) {
   return true;
 }
 
-export const DEFAULT_PORTFOLIO = { version: 1, assetTypes: {}, allocation: {}, snapshots: [] };
+export const DEFAULT_PORTFOLIO = { version: 1, assetTypes: defaultAssetTypes, allocation: {}, snapshots: [] };
 
 export async function openExistingFile() {
   // @ts-ignore
@@ -119,7 +121,7 @@ export async function getSavedFile() {
 
 export async function readPortfolioFile(handle, password) {
   const file = await handle.getFile();
-  if (file.size === 0) return { version: 1, assetTypes: {}, allocation: {}, snapshots: [] };
+  if (file.size === 0) return DEFAULT_PORTFOLIO;
   const buf = await file.arrayBuffer();
   return await decryptJson(buf, password);
 }
