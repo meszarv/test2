@@ -9,7 +9,7 @@ import RebalancePlan from "./components/RebalancePlan.jsx";
 import ConfigPage from "./components/ConfigPage.jsx";
 import { mkAsset, stripIds, formatCurrency, mkId, labelFor } from "./utils.js";
 import { defaultAssetTypes, netWorth, rebalance, buildSeries } from "./data.js";
-import { openExistingFile, createNewFile, getSavedFile, readPortfolioFile, writePortfolioFile } from "./file.js";
+import { openExistingFile, createNewFile, getSavedFile, readPortfolioFile, writePortfolioFile, clearSavedFile } from "./file.js";
 
 export default function App() {
   const [password, setPassword] = useState("");
@@ -39,6 +39,8 @@ export default function App() {
           if (perm === "granted" || perm === "prompt") {
             setFileHandle(saved);
             setStep("password");
+          } else {
+            await clearSavedFile();
           }
         }
       } catch (e) {
@@ -142,7 +144,14 @@ export default function App() {
       setAssetTypes(data.assetTypes || defaultAssetTypes);
       setStep("main");
     } catch (e) {
-      setError(e && e.message ? e.message : String(e));
+      if (e && (e.name === "NotAllowedError" || e.name === "NotFoundError")) {
+        await clearSavedFile();
+        setFileHandle(null);
+        setStep("pick");
+        setError("Cannot access saved file. Please pick it again.");
+      } else {
+        setError(e && e.message ? e.message : String(e));
+      }
     } finally { setLoading(false); }
   }
 
@@ -164,6 +173,7 @@ export default function App() {
     try {
       const data = { version: 1, assetTypes, allocation, snapshots };
       await writePortfolioFile(fileHandle, password, data);
+      await clearSavedFile();
       setFileHandle(null);
       setPassword("");
       setSnapshots([]);
