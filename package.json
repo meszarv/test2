@@ -8,7 +8,7 @@
     "preview": "vite preview",
     "test": "echo \"No tests\"",
     "predeploy": "npm run build",
-    "deploy": "gh-pages -d dist"
+    "deploy": "gh-pages -d docs"
   },
   "keywords": [],
   "author": "",
