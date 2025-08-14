@@ -119,6 +119,10 @@ export async function getSavedFile() {
   return handle;
 }
 
+export async function clearSavedFile() {
+  await idbSet("fileHandle", null);
+}
+
 export async function readPortfolioFile(handle, password) {
   const file = await handle.getFile();
   if (file.size === 0) return DEFAULT_PORTFOLIO;
