@@ -27,24 +27,32 @@ export function normalizeAllocation(alloc) {
   return out; // fractions summing to ~1
 }
 
-export function rebalanceWithNewCapital(assets, allocPct, newCapital) {
+export function rebalance(assets, allocPct) {
   const totalNow = netWorth(assets);
   const byCat = currentByCategory(assets);
   const norm = normalizeAllocation(allocPct);
   const cats = Array.from(new Set([...Object.keys(byCat), ...Object.keys(norm)]));
 
-  const targetTotal = totalNow + (Number(newCapital) || 0);
   const idealByCat = {};
-  for (const c of cats) idealByCat[c] = (norm[c] || 0) * targetTotal;
+  for (const c of cats) idealByCat[c] = (norm[c] || 0) * totalNow;
 
+  const cashSurplus = Math.max(0, (byCat.cash || 0) - (idealByCat.cash || 0));
   const gaps = {};
-  for (const c of cats) gaps[c] = Math.max(0, (idealByCat[c] || 0) - (byCat[c] || 0));
+  for (const c of cats) {
+    if (c === "cash") continue;
+    gaps[c] = Math.max(0, (idealByCat[c] || 0) - (byCat[c] || 0));
+  }
 
   const sumGaps = Object.values(gaps).reduce((a, b) => a + b, 0) || 1;
-  const scaled = {};
-  for (const c of cats) scaled[c] = (gaps[c] / sumGaps) * (Number(newCapital) || 0);
+  const investPlan = {};
+  if (cashSurplus > 0 && sumGaps > 0) {
+    investPlan.cash = -cashSurplus;
+    for (const c of Object.keys(gaps)) {
+      investPlan[c] = (gaps[c] / sumGaps) * cashSurplus;
+    }
+  }
 
-  return { totalNow, targetTotal, byCat, idealByCat, investPlan: scaled };
+  return { totalNow, targetTotal: totalNow, byCat, idealByCat, investPlan };
 }
 
 export function groupByPeriod(points, mode) {
