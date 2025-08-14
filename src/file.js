@@ -89,23 +89,27 @@ function equalBytes(a, b) {
   return true;
 }
 
-export async function pickFile() {
-  try {
-    // @ts-ignore
-    const [handle] = await window.showOpenFilePicker({
-      types: [{ description: "Portfolio", accept: { "application/octet-stream": [".enc"] } }],
-    });
-    await idbSet("fileHandle", handle);
-    return handle;
-  } catch (e) {
-    // @ts-ignore
-    const handle = await window.showSaveFilePicker({
-      suggestedName: "portfolio.enc",
-      types: [{ description: "Portfolio", accept: { "application/octet-stream": [".enc"] } }],
-    });
-    await idbSet("fileHandle", handle);
-    return handle;
-  }
+export const DEFAULT_PORTFOLIO = { version: 1, assetTypes: {}, allocation: {}, snapshots: [] };
+
+export async function openExistingFile() {
+  // @ts-ignore
+  const [handle] = await window.showOpenFilePicker({
+    types: [{ description: "Portfolio", accept: { "application/octet-stream": [".enc"] } }],
+  });
+  await idbSet("fileHandle", handle);
+  return handle;
+}
+
+export async function createNewFile() {
+  // @ts-ignore
+  const handle = await window.showSaveFilePicker({
+    suggestedName: "portfolio.enc",
+    types: [{ description: "Portfolio", accept: { "application/octet-stream": [".enc"] } }],
+  });
+  await idbSet("fileHandle", handle);
+  const writable = await handle.createWritable();
+  await writable.close();
+  return handle;
 }
 
 export async function getSavedFile() {
