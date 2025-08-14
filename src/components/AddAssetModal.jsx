@@ -8,12 +8,21 @@ export default function AddAssetModal({ open, onClose, assetTypes, onAdd }) {
     setType(Object.keys(assetTypes)[0] || "");
   }, [assetTypes]);
   const [value, setValue] = useState("");
+  const [fields, setFields] = useState({});
+
+  useEffect(() => {
+    const def = assetTypes[type] || { fields: [] };
+    const init = {};
+    for (const f of def.fields) init[f.key] = f.default || "";
+    setFields(init);
+  }, [type, assetTypes]);
 
   function submit() {
-    onAdd({ name, type, value: Number(value || 0) });
+    onAdd({ name, type, value: Number(value || 0), ...fields });
     setName("");
     setType(Object.keys(assetTypes)[0] || "");
     setValue("");
+    setFields({});
     onClose();
   }
 
@@ -35,6 +44,14 @@ export default function AddAssetModal({ open, onClose, assetTypes, onAdd }) {
             ))}
           </select>
         </label>
+        {(assetTypes[type]?.fields || []).map((f) => (
+          <TextInput
+            key={f.key}
+            label={f.label}
+            value={fields[f.key] || ""}
+            onChange={(v) => setFields({ ...fields, [f.key]: v })}
+          />
+        ))}
         <TextInput label="Value" type="number" value={value} onChange={setValue} />
         <div className="flex justify-end gap-2 pt-2">
           <button onClick={onClose} title="Close" className="px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 hover:bg-zinc-700">✖</button>

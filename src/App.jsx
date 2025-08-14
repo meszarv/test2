@@ -4,7 +4,7 @@ import TextInput from "./components/TextInput.jsx";
 import LineChart from "./components/LineChart.jsx";
 import AssetTable from "./components/AssetTable.jsx";
 import AddAssetModal from "./components/AddAssetModal.jsx";
-import HistorySidebar from "./components/HistorySidebar.jsx";
+import SnapshotTabs from "./components/SnapshotTabs.jsx";
 import RebalancePlan from "./components/RebalancePlan.jsx";
 import ConfigPage from "./components/ConfigPage.jsx";
 import { mkAsset, stripIds, formatCurrency, mkId, labelFor } from "./utils.js";
@@ -57,11 +57,11 @@ export default function App() {
   const rebalancePlanData = useMemo(() => rebalance(assets, allocation), [assets, allocation]);
   const prevAssets = useMemo(() => (currentIndex > 0 ? snapshots[currentIndex - 1]?.assets || [] : []), [snapshots, currentIndex]);
 
-  function snapshotFromAssets(nextAssets) {
+  function snapshotFromAssets(nextAssets, date = new Date()) {
     setSnapshots((prev) => {
-      const snap = { asOf: new Date().toISOString(), assets: nextAssets.map(stripIds) };
-      const s = [...prev, snap];
-      setCurrentIndex(s.length - 1);
+      const snap = { asOf: date.toISOString(), assets: nextAssets.map(stripIds) };
+      const s = [...prev, snap].sort((a, b) => new Date(a.asOf) - new Date(b.asOf));
+      setCurrentIndex(s.indexOf(snap));
       return s;
     });
   }
@@ -78,10 +78,25 @@ export default function App() {
     setAssets((snap.assets || []).map((a) => ({ ...a, id: mkId(), name: a.name || labelFor(a.type, assetTypes) })));
   }
 
-  function handleAddAsset({ name, type, value }) {
+  function handleAddAsset({ name, type, value, ...fields }) {
     const asset = mkAsset(type, assetTypes, name);
     asset.value = value;
+    Object.assign(asset, fields);
     setAssetsAndSnapshot([...assets, asset]);
+  }
+
+  function handleAddSnapshot() {
+    snapshotFromAssets(assets);
+  }
+
+  function handleChangeSnapshotDate(i, date) {
+    setSnapshots((prev) => {
+      const updated = { ...prev[i], asOf: date.toISOString() };
+      const next = prev.map((s, idx) => (idx === i ? updated : s));
+      const sorted = next.slice().sort((a, b) => new Date(a.asOf) - new Date(b.asOf));
+      setCurrentIndex(sorted.indexOf(updated));
+      return sorted;
+    });
   }
 
   async function handleOpenExisting() {
@@ -114,7 +129,7 @@ export default function App() {
       if (isEmpty) {
         await writePortfolioFile(fileHandle, password, data);
       }
-      const snaps = data.snapshots || [];
+      const snaps = (data.snapshots || []).slice().sort((a, b) => new Date(a.asOf) - new Date(b.asOf));
       setSnapshots(snaps);
       const latest = snaps[snaps.length - 1];
       if (latest) {
@@ -223,6 +238,13 @@ export default function App() {
             </div>
 
             <Section title="Assets">
+              <SnapshotTabs
+                snapshots={snapshots}
+                currentIndex={currentIndex}
+                onSelect={handleSelectSnapshot}
+                onAdd={handleAddSnapshot}
+                onChangeDate={handleChangeSnapshotDate}
+              />
               <AssetTable
                 assets={assets}
                 prevAssets={prevAssets}
@@ -234,7 +256,6 @@ export default function App() {
 
         </div>
         <AddAssetModal open={addOpen} onClose={() => setAddOpen(false)} assetTypes={assetTypes} onAdd={handleAddAsset} />
-        <HistorySidebar snapshots={snapshots} currentIndex={currentIndex} onSelect={handleSelectSnapshot} />
         {currentIndex === snapshots.length - 1 && (
           <button
             onClick={() => setAddOpen(true)}
