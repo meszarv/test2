@@ -6,7 +6,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
  * - Form-based asset editing (no JSON), add/remove items per type
  * - Allocation editor with % targets
  * - Rebalance helper: enter "new capital" and get invest suggestions (no selling assumed)
- * - Historical snapshots: each save writes a new encrypted file in the chosen folder
+ * - Historical snapshots stored in a single encrypted portfolio file
  * - Net-worth chart (monthly/yearly)
  * - Encryption: AES‑GCM 256 with PBKDF2 (SHA‑256)
  *
@@ -14,7 +14,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
  */
 
 // ------------------------------
-// Minimal IndexedDB helpers to persist the directory handle
+// Minimal IndexedDB helpers to persist the file handle
 // ------------------------------
 const DB_NAME = "portfolio-tracker-db";
 const STORE = "handles";
@@ -114,62 +114,43 @@ function equalBytes(a, b) {
 // ------------------------------
 // File I/O helpers
 // ------------------------------
-async function pickDirectory() {
-  // @ts-ignore
-  const dir = await (window).showDirectoryPicker();
-  await idbSet("dirHandle", dir);
-  return dir;
+async function pickFile() {
+  try {
+    // @ts-ignore
+    const [handle] = await (window).showOpenFilePicker({
+      types: [{ description: "Portfolio", accept: { "application/octet-stream": [".enc"] } }],
+    });
+    await idbSet("fileHandle", handle);
+    return handle;
+  } catch (e) {
+    // If user cancels open picker, allow creating a new file instead
+    // @ts-ignore
+    const handle = await (window).showSaveFilePicker({
+      suggestedName: "portfolio.enc",
+      types: [{ description: "Portfolio", accept: { "application/octet-stream": [".enc"] } }],
+    });
+    await idbSet("fileHandle", handle);
+    return handle;
+  }
 }
 
-async function getSavedDirectory() {
-  const handle = await idbGet("dirHandle");
+async function getSavedFile() {
+  const handle = await idbGet("fileHandle");
   return handle;
 }
 
-function formatUtcTimestamp(d = new Date()) {
-  const pad = (n) => String(n).padStart(2, "0");
-  return (
-    d.getUTCFullYear().toString() +
-    pad(d.getUTCMonth() + 1) +
-    pad(d.getUTCDate()) +
-    "-" +
-    pad(d.getUTCHours()) +
-    pad(d.getUTCMinutes()) +
-    pad(d.getUTCSeconds())
-  );
+async function readPortfolioFile(handle, password) {
+  const file = await handle.getFile();
+  if (file.size === 0) return { version: 1, assetTypes: {}, allocation: {}, snapshots: [] };
+  const buf = await file.arrayBuffer();
+  return await decryptJson(buf, password);
 }
 
-function isEncName(name) {
-  return /^portfolio-\d{8}-\d{6}\.enc$/.test(name);
-}
-
-async function readAllSnapshots(dir, password) {
-  const out = [];
-  // @ts-ignore for-await entries()
-  for await (const [name, handle] of dir.entries()) {
-    if (handle.kind === "file" && isEncName(name)) {
-      const file = await handle.getFile();
-      try {
-        const snap = await decryptJson(await file.arrayBuffer(), password);
-        if (snap && snap.asOf && snap.assets) out.push(snap);
-      } catch (e) {
-        console.warn("Decrypt failed", name, e);
-      }
-    }
-  }
-  out.sort((a, b) => new Date(a.asOf).getTime() - new Date(b.asOf).getTime());
-  return out;
-}
-
-async function writeSnapshot(dir, password, snapshot) {
-  const ts = formatUtcTimestamp(new Date());
-  const name = `portfolio-${ts}.enc`;
-  const fileHandle = await dir.getFileHandle(name, { create: true });
-  const payload = await encryptJson(snapshot, password);
-  const writable = await fileHandle.createWritable();
+async function writePortfolioFile(handle, password, data) {
+  const payload = await encryptJson(data, password);
+  const writable = await handle.createWritable();
   await writable.write(payload);
   await writable.close();
-  return name;
 }
 
 // ------------------------------
@@ -559,7 +540,7 @@ function groupByPeriod(points, mode) {
 // ------------------------------
 export default function App() {
   const [password, setPassword] = useState("");
-  const [dir, setDir] = useState(null);
+  const [fileHandle, setFileHandle] = useState(null);
   const [snapshots, setSnapshots] = useState([]);
   const [asOf, setAsOf] = useState(() => new Date().toISOString().slice(0, 10));
   const [assetTypes, setAssetTypes] = useState(defaultAssetTypes);
@@ -577,10 +558,10 @@ export default function App() {
   useEffect(() => {
     (async () => {
       try {
-        const saved = await getSavedDirectory();
+        const saved = await getSavedFile();
         if (saved && saved.queryPermission) {
           const perm = await saved.queryPermission({ mode: "readwrite" });
-          if (perm === "granted" || perm === "prompt") setDir(saved);
+          if (perm === "granted" || perm === "prompt") setFileHandle(saved);
         }
       } catch (e) {
         console.warn("No saved handle", e);
@@ -592,41 +573,43 @@ export default function App() {
   const series = useMemo(() => buildSeries(snapshots, period), [snapshots, period]);
   const rebalance = useMemo(() => rebalanceWithNewCapital(assets, allocation, newCapital || 0), [assets, allocation, newCapital]);
 
-  async function handlePickDir() {
+  async function handlePickFile() {
     try {
-      const d = await pickDirectory();
-      setDir(d);
+      const h = await pickFile();
+      setFileHandle(h);
     } catch (e) {
       setError(e && e.message ? e.message : String(e));
     }
   }
 
   async function handleLoad() {
-    if (!dir || !password) return setError("Pick a folder and enter password first.");
+    if (!fileHandle || !password) return setError("Pick a file and enter password first.");
     setLoading(true); setError(null);
     try {
-      const snaps = await readAllSnapshots(dir, password);
+      const data = await readPortfolioFile(fileHandle, password);
+      const snaps = data.snapshots || [];
       setSnapshots(snaps);
       const latest = snaps[snaps.length - 1];
       if (latest) {
         setAssets((latest.assets || []).map((a) => ({ ...a, id: mkId() })));
-        setAllocation(latest.allocation || {});
-        setAssetTypes(latest.assetTypes || defaultAssetTypes);
       }
+      setAllocation(data.allocation || {});
+      setAssetTypes(data.assetTypes || defaultAssetTypes);
     } catch (e) {
       setError(e && e.message ? e.message : String(e));
     } finally { setLoading(false); }
   }
 
   async function handleSaveNew() {
-    if (!dir || !password) return setError("Pick a folder and enter password first.");
+    if (!fileHandle || !password) return setError("Pick a file and enter password first.");
     setLoading(true); setError(null);
     try {
-      const snap = { asOf, assets: assets.map(stripIds), allocation, assetTypes };
-      const name = await writeSnapshot(dir, password, snap);
-      const snaps = await readAllSnapshots(dir, password);
-      setSnapshots(snaps);
-      alert(`Saved ${name}`);
+      const snap = { asOf, assets: assets.map(stripIds) };
+      const nextSnapshots = [...snapshots, snap];
+      const data = { version: 1, assetTypes, allocation, snapshots: nextSnapshots };
+      await writePortfolioFile(fileHandle, password, data);
+      setSnapshots(nextSnapshots);
+      alert("Saved snapshot");
     } catch (e) {
       setError(e && e.message ? e.message : String(e));
     } finally { setLoading(false); }
@@ -638,11 +621,11 @@ export default function App() {
         <header className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-semibold">Local‑First Portfolio Tracker</h1>
-            <p className="text-sm text-zinc-400">Private by default · Encrypted snapshots on your disk</p>
+            <p className="text-sm text-zinc-400">Private by default · Encrypted portfolio file on your disk</p>
           </div>
           <div className="flex items-end gap-2">
             <TextInput label="Password" type="password" value={password} onChange={setPassword} className="w-56" />
-            <button onClick={handlePickDir} className="h-10 px-3 rounded-lg bg-zinc-800 border border-zinc-700 hover:bg-zinc-700">{dir ? "Change Folder" : "Choose Folder"}</button>
+            <button onClick={handlePickFile} className="h-10 px-3 rounded-lg bg-zinc-800 border border-zinc-700 hover:bg-zinc-700">{fileHandle ? "Change File" : "Choose File"}</button>
             <button onClick={handleLoad} className="h-10 px-3 rounded-lg bg-zinc-800 border border-zinc-700 hover:bg-zinc-700">Load</button>
             <button onClick={handleSaveNew} className="h-10 px-3 rounded-lg bg-blue-600 hover:bg-blue-500">Save snapshot</button>
           </div>
