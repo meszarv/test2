@@ -2,13 +2,14 @@ import React, { useEffect, useMemo, useState } from "react";
 import Section from "./components/Section.jsx";
 import TextInput from "./components/TextInput.jsx";
 import LineChart from "./components/LineChart.jsx";
+import PieChart from "./components/PieChart.jsx";
 import AssetTable from "./components/AssetTable.jsx";
 import AddAssetModal from "./components/AddAssetModal.jsx";
 import SnapshotTabs from "./components/SnapshotTabs.jsx";
 import RebalancePlan from "./components/RebalancePlan.jsx";
 import ConfigPage from "./components/ConfigPage.jsx";
 import { mkAsset, stripIds, formatCurrency, mkId, labelFor } from "./utils.js";
-import { defaultAssetTypes, netWorth, rebalance, buildSeries } from "./data.js";
+import { defaultAssetTypes, netWorth, rebalance, buildSeries, currentByCategory } from "./data.js";
 import { openExistingFile, createNewFile, getSavedFile, readPortfolioFile, writePortfolioFile, clearSavedFile } from "./file.js";
 
 export default function App() {
@@ -58,6 +59,7 @@ export default function App() {
   const series = useMemo(() => buildSeries(snapshots, period), [snapshots, period]);
   const rebalancePlanData = useMemo(() => rebalance(assets, allocation), [assets, allocation]);
   const prevAssets = useMemo(() => (currentIndex > 0 ? snapshots[currentIndex - 1]?.assets || [] : []), [snapshots, currentIndex]);
+  const currentAllocation = useMemo(() => currentByCategory(assets), [assets]);
 
   function snapshotFromAssets(nextAssets, date = new Date()) {
     setSnapshots((prev) => {
@@ -77,9 +79,11 @@ export default function App() {
     });
   }
 
-  function setAssetsAndSnapshot(next) {
+  function setAssetsAndUpdateSnapshot(next) {
     setAssets(next);
-    snapshotFromAssets(next);
+    setSnapshots((prev) =>
+      prev.map((s, i) => (i === currentIndex ? { ...s, assets: next.map(stripIds) } : s))
+    );
   }
 
   function handleSelectSnapshot(i) {
@@ -93,7 +97,7 @@ export default function App() {
     const asset = mkAsset(type, assetTypes, name);
     asset.value = value;
     Object.assign(asset, fields);
-    setAssetsAndSnapshot([...assets, asset]);
+    setAssetsAndUpdateSnapshot([...assets, asset]);
   }
 
   function handleAddSnapshot() {
@@ -268,6 +272,7 @@ export default function App() {
               <Section title="Net worth (current)">
                 <div className="text-3xl font-semibold">{formatCurrency(totalNow)}</div>
                 <div className="text-xs text-zinc-400 mt-1">Computed from asset list</div>
+                <PieChart data={currentAllocation} />
               </Section>
 
               <Section title="Rebalance">
@@ -297,9 +302,8 @@ export default function App() {
               <AssetTable
                 assets={assets}
                 prevAssets={prevAssets}
-                setAssets={setAssetsAndSnapshot}
+                setAssets={setAssetsAndUpdateSnapshot}
                 assetTypes={assetTypes}
-                readOnly={currentIndex !== snapshots.length - 1}
               />
             </Section>
 
