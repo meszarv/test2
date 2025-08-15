@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { mkId, stripIds, labelFor } from "../utils.js";
+import { labelFor } from "../utils.js";
 
 export default function useSnapshots({ assets, setAssets, assetTypes }) {
   const [snapshots, setSnapshots] = useState([]);
@@ -9,7 +9,7 @@ export default function useSnapshots({ assets, setAssets, assetTypes }) {
     setSnapshots((prev) => {
       const iso = date.toISOString();
       const month = iso.slice(0, 7);
-      const snap = { asOf: iso, assets: nextAssets.map(stripIds) };
+      const snap = { asOf: iso, assets: nextAssets.map((a) => ({ ...a })) };
       const existing = prev.findIndex((p) => p.asOf.slice(0, 7) === month);
       let s;
       if (existing >= 0) {
@@ -25,14 +25,14 @@ export default function useSnapshots({ assets, setAssets, assetTypes }) {
 
   function setAssetsAndUpdateSnapshot(next) {
     setAssets(next);
-    setSnapshots((prev) => prev.map((s, i) => (i === currentIndex ? { ...s, assets: next.map(stripIds) } : s)));
+    setSnapshots((prev) => prev.map((s, i) => (i === currentIndex ? { ...s, assets: next.map((a) => ({ ...a })) } : s)));
   }
 
   function handleSelectSnapshot(i) {
     const snap = snapshots[i];
     if (!snap) return;
     setCurrentIndex(i);
-    setAssets((snap.assets || []).map((a) => ({ ...a, id: mkId(), name: a.name || labelFor(a.type, assetTypes) })));
+    setAssets((snap.assets || []).map((a) => ({ ...a, name: a.name || labelFor(a.type, assetTypes) })));
   }
 
   function handleAddSnapshot() {
