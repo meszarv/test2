@@ -91,7 +91,16 @@ function equalBytes(a, b) {
   return true;
 }
 
-export const DEFAULT_PORTFOLIO = { version: 1, assetTypes: defaultAssetTypes, allocation: {}, snapshots: [] };
+export const DEFAULT_PORTFOLIO = { version: 2, currency: "USD", assetTypes: defaultAssetTypes, allocation: {}, snapshots: [] };
+
+export function upgradePortfolio(data) {
+  if (!data || typeof data !== "object") return DEFAULT_PORTFOLIO;
+  let out = { ...data };
+  if (out.version === 1) {
+    out = { currency: "USD", ...out, version: 2 };
+  }
+  return out;
+}
 
 export async function openExistingFile() {
   // @ts-ignore
@@ -127,7 +136,8 @@ export async function readPortfolioFile(handle, password) {
   const file = await handle.getFile();
   if (file.size === 0) return DEFAULT_PORTFOLIO;
   const buf = await file.arrayBuffer();
-  return await decryptJson(buf, password);
+  const data = await decryptJson(buf, password);
+  return upgradePortfolio(data);
 }
 
 export async function writePortfolioFile(handle, password, data) {
