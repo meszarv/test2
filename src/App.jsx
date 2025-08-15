@@ -25,6 +25,7 @@ export default function App() {
   const [period, setPeriod] = useState("monthly");
   const [configOpen, setConfigOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const [editAsset, setEditAsset] = useState(null);
 
   const {
     snapshots,
@@ -86,6 +87,12 @@ export default function App() {
     asset.description = description;
     asset.value = value;
     setAssetsAndUpdateSnapshot([...assets, asset]);
+  }
+
+  function handleEditAsset(updated) {
+    setAssetsAndUpdateSnapshot(
+      assets.map((a) => (a.id === updated.id ? updated : a))
+    );
   }
 
 
