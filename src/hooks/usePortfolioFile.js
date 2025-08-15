@@ -8,7 +8,7 @@ import {
   clearSavedFile,
 } from "../file.js";
 import { defaultAssetTypes } from "../data.js";
-import { mkId, labelFor } from "../utils.js";
+import { mkId, labelFor, mkAsset } from "../utils.js";
 
 export default function usePortfolioFile({
   assets,
@@ -74,6 +74,43 @@ export default function usePortfolioFile({
       setStep("password");
     } catch (e) {
       setError(e && e.message ? e.message : String(e));
+    }
+  }
+
+  async function handleOpenSample() {
+    setLoading(true);
+    setError(null);
+    try {
+      const types = Object.keys(defaultAssetTypes);
+      const sampleAssets = Array.from({ length: 5 }, (_, i) => {
+        const t = types[Math.floor(Math.random() * types.length)];
+        const a = mkAsset(t, defaultAssetTypes, `Sample ${i + 1}`);
+        a.value = Math.round(Math.random() * 50000);
+        return a;
+      });
+      const sampleSnapshots = [];
+      const now = new Date();
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date(now);
+        d.setMonth(now.getMonth() - i);
+        const snapAssets = sampleAssets.map((a) => ({
+          ...a,
+          value: Math.round(a.value * (0.8 + Math.random() * 0.4)),
+        }));
+        sampleSnapshots.push({ asOf: d.toISOString(), assets: snapAssets });
+      }
+      setAssetTypes(defaultAssetTypes);
+      setAllocation({});
+      setSnapshots(sampleSnapshots);
+      setAssets(sampleSnapshots[sampleSnapshots.length - 1].assets);
+      setCurrentIndex(sampleSnapshots.length - 1);
+      setStep("main");
+      setDirty(false);
+      skipDirty.current = true;
+    } catch (e) {
+      setError(e && e.message ? e.message : String(e));
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -172,6 +209,7 @@ export default function usePortfolioFile({
     skipDirty,
     handleOpenExisting,
     handleCreateNew,
+    handleOpenSample,
     handleLoad,
     handleSave,
     handleCloseFile,
