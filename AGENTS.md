@@ -1,3 +1,4 @@
 - After modifying any code, run `npm run build` to generate the production site in the `docs` directory.
 - Commit the contents of the `docs` directory along with your changes.
 - Bump the version in `package.json` after each change.
+- When the portfolio file structure changes, bump the file version and add a conversion function with a corresponding unit test to upgrade older files.
