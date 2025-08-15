@@ -1,8 +1,32 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { pieColors, formatCurrency } from "../utils.js";
 
-export default function PieChart({ data, targetData, showLabels = false }) {
+function darken(hex, amt) {
+  let col = hex.replace("#", "");
+  if (col.length === 3) col = col.split("").map((c) => c + c).join("");
+  const num = parseInt(col, 16);
+  let r = (num >> 16) + amt;
+  let g = ((num >> 8) & 0xff) + amt;
+  let b = (num & 0xff) + amt;
+  r = Math.max(0, Math.min(255, r));
+  g = Math.max(0, Math.min(255, g));
+  b = Math.max(0, Math.min(255, b));
+  return `#${[r, g, b].map((x) => x.toString(16).padStart(2, "0")).join("")}`;
+}
+
+export default function PieChart({ data, targetData, showTarget = true }) {
   const ref = useRef(null);
+  const arcsRef = useRef([]);
+  const metricsRef = useRef({ cx: 0, cy: 0, radius: 0 });
+  const totalRef = useRef(1);
+  const percentFmtRef = useRef(
+    new Intl.NumberFormat(undefined, {
+      style: "percent",
+      maximumFractionDigits: 0,
+    })
+  );
+  const [hover, setHover] = useState(null);
+
   useEffect(() => {
     const canvas = ref.current;
     if (!canvas) return;
@@ -26,14 +50,14 @@ export default function PieChart({ data, targetData, showLabels = false }) {
       const targetEntries = labels.map((l) => [l, targetData?.[l] || 0]);
       const total =
         entries.reduce((a, [, v]) => a + (Number(v) || 0), 0) || 1;
+      totalRef.current = total;
       let start = -Math.PI / 2;
       const radius = Math.min(width, height) / 2 - 8 * dpr;
       const cx = width / 2;
       const cy = height / 2;
-      const percentFmt = new Intl.NumberFormat(undefined, {
-        style: "percent",
-        maximumFractionDigits: 0,
-      });
+      metricsRef.current = { cx, cy, radius };
+      arcsRef.current = [];
+      const percentFmt = percentFmtRef.current;
       entries.forEach(([label, value], i) => {
         const val = Number(value) || 0;
         const angle = (val / total) * Math.PI * 2;
@@ -44,7 +68,7 @@ export default function PieChart({ data, targetData, showLabels = false }) {
         ctx.arc(cx, cy, radius, start, start + angle);
         ctx.closePath();
         ctx.fill();
-        if (showLabels && val > 0) {
+        if (val > 0) {
           const mid = start + angle / 2;
           const labelRadius = radius * 0.6;
           const percentLabel = percentFmt.format(val / total);
@@ -75,18 +99,20 @@ export default function PieChart({ data, targetData, showLabels = false }) {
             ctx.fillText(text, tx, ty);
           }
         }
+        arcsRef.current.push({ start, end: start + angle, label, value: val });
         start += angle;
       });
-      if (targetData) {
+      if (targetData && showTarget) {
         const targetTotal =
           targetEntries.reduce((a, [, v]) => a + (Number(v) || 0), 0) || 1;
         let tStart = -Math.PI / 2;
         const ringWidth = 12 * dpr;
-        const ringRadius = radius - ringWidth / 2;
+        const ringGap = 8 * dpr;
+        const ringRadius = radius - ringWidth / 2 - ringGap;
         targetEntries.forEach(([label, value], i) => {
           const val = Number(value) || 0;
           const angle = (val / targetTotal) * Math.PI * 2;
-          const color = pieColors[i % pieColors.length];
+          const color = darken(pieColors[i % pieColors.length], -40);
           ctx.strokeStyle = color;
           ctx.lineWidth = ringWidth;
           ctx.beginPath();
@@ -97,17 +123,72 @@ export default function PieChart({ data, targetData, showLabels = false }) {
       }
     }
 
+    function handleMove(e) {
+      const canvas = ref.current;
+      if (!canvas) return;
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      const { cx, cy, radius } = metricsRef.current;
+      const total = totalRef.current;
+      const x = (e.clientX - rect.left) * dpr;
+      const y = (e.clientY - rect.top) * dpr;
+      const dx = x - cx;
+      const dy = y - cy;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist > radius) {
+        setHover(null);
+        return;
+      }
+      let ang = Math.atan2(dy, dx);
+      if (ang < -Math.PI / 2) ang += 2 * Math.PI;
+      for (const arc of arcsRef.current) {
+        if (ang >= arc.start && ang < arc.end) {
+          setHover({
+            label: arc.label,
+            value: arc.value,
+            percent: arc.value / total,
+            x: e.clientX - rect.left,
+            y: e.clientY - rect.top,
+          });
+          return;
+        }
+      }
+      setHover(null);
+    }
+
+    function handleLeave() {
+      setHover(null);
+    }
+
     draw();
     window.addEventListener("resize", draw);
-    return () => window.removeEventListener("resize", draw);
-  }, [data, targetData, showLabels]);
+    canvas.addEventListener("mousemove", handleMove);
+    canvas.addEventListener("mouseleave", handleLeave);
+    return () => {
+      window.removeEventListener("resize", draw);
+      canvas.removeEventListener("mousemove", handleMove);
+      canvas.removeEventListener("mouseleave", handleLeave);
+    };
+  }, [data, targetData, showTarget]);
+
+  const percentFmt = percentFmtRef.current;
+
   return (
-    <div>
+    <div className="relative">
       <canvas
         ref={ref}
         className="w-full h-40 rounded border border-zinc-800 bg-zinc-900"
       />
-      {targetData && (
+      {hover && (
+        <div
+          className="absolute pointer-events-none bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs"
+          style={{ left: hover.x, top: hover.y }}
+        >
+          <div>{hover.label}</div>
+          <div>{percentFmt.format(hover.percent)} – {formatCurrency(hover.value)}</div>
+        </div>
+      )}
+      {targetData && showTarget && (
         <div className="flex justify-center gap-4 mt-2 text-xs text-zinc-400">
           <div className="flex items-center gap-1">
             <span className="block w-3 h-3 rounded-full bg-zinc-400" />
@@ -122,3 +203,4 @@ export default function PieChart({ data, targetData, showLabels = false }) {
     </div>
   );
 }
+

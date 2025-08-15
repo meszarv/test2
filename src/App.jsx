@@ -25,6 +25,7 @@ export default function App() {
   const [configOpen, setConfigOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [editAsset, setEditAsset] = useState(null);
+  const [showTarget, setShowTarget] = useState(true);
 
   const {
     snapshots,
@@ -155,10 +156,27 @@ export default function App() {
           {loading && <div className="p-3 rounded-xl bg-zinc-800 text-zinc-300">Working…</div>}
 
             <div className="grid md:grid-cols-3 gap-6">
-              <Section title="Net worth (current)">
+              <Section
+                title="Net worth (current)"
+                right={
+                  <label className="flex items-center gap-1 text-xs">
+                    <input
+                      type="checkbox"
+                      className="accent-blue-600"
+                      checked={showTarget}
+                      onChange={(e) => setShowTarget(e.target.checked)}
+                    />
+                    Show target
+                  </label>
+                }
+              >
                 <div className="text-3xl font-semibold">{formatCurrency(totalNow)}</div>
                 <div className="text-xs text-zinc-400 mt-1">Computed from asset list</div>
-                <PieChart data={currentAllocation} targetData={rebalancePlanData.idealByCat} />
+                <PieChart
+                  data={currentAllocation}
+                  targetData={rebalancePlanData.idealByCat}
+                  showTarget={showTarget}
+                />
               </Section>
 
               <Section title="Rebalance">
