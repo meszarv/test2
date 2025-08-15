@@ -5,6 +5,7 @@ import LineChart from "./components/LineChart.jsx";
 import PieChart from "./components/PieChart.jsx";
 import AssetTable from "./components/AssetTable.jsx";
 import AddAssetModal from "./components/AddAssetModal.jsx";
+import EditAssetModal from "./components/EditAssetModal.jsx";
 import SnapshotTabs from "./components/SnapshotTabs.jsx";
 import RebalancePlan from "./components/RebalancePlan.jsx";
 import ConfigPage from "./components/ConfigPage.jsx";
@@ -86,6 +87,7 @@ export default function App() {
     asset.value = value;
     setAssetsAndUpdateSnapshot([...assets, asset]);
   }
+
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
@@ -174,11 +176,19 @@ export default function App() {
                 prevAssets={prevAssets}
                 setAssets={setAssetsAndUpdateSnapshot}
                 assetTypes={assetTypes}
+                onEdit={(a) => setEditAsset(a)}
               />
             </Section>
 
         </div>
         <AddAssetModal open={addOpen} onClose={() => setAddOpen(false)} assetTypes={assetTypes} onAdd={handleAddAsset} />
+        <EditAssetModal
+          open={!!editAsset}
+          asset={editAsset}
+          onClose={() => setEditAsset(null)}
+          assetTypes={assetTypes}
+          onSave={handleEditAsset}
+        />
         {currentIndex === snapshots.length - 1 && (
           <button
             onClick={() => setAddOpen(true)}
