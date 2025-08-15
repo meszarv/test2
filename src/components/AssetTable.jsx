@@ -70,14 +70,21 @@ export default function AssetTable({ assets, prevAssets, setAssets, assetTypes, 
                 <td className="p-2 text-xs whitespace-pre-line">{a.description}</td>
                 <td className="p-2 text-right">
                   <div className="flex items-center justify-end gap-2">
-                    <input
-                      type="number"
-                      value={a.value}
-                      onChange={(e) => updateValue(a.id, e.target.value)}
-                      onFocus={(e) => e.target.select()}
-                      className="bg-transparent border border-transparent text-right px-1 py-1 rounded focus:bg-zinc-800 focus:border-blue-500 focus:outline-none w-32"
-                      readOnly={readOnly}
-                    />
+                    <div className="relative w-32">
+                      <input
+                        type="number"
+                        value={a.value}
+                        onChange={(e) => updateValue(a.id, e.target.value)}
+                        onFocus={(e) => e.target.select()}
+                        className="peer bg-transparent border border-transparent text-right px-1 py-1 rounded focus:bg-zinc-800 focus:border-blue-500 focus:outline-none w-full text-transparent focus:text-inherit"
+                        readOnly={readOnly}
+                      />
+                      <span
+                        className={`pointer-events-none absolute inset-0 flex items-center justify-end px-1 ${readOnly ? "" : "peer-focus:hidden"}`}
+                      >
+                        {formatCurrency(a.value)}
+                      </span>
+                    </div>
                     {delta ? (
                       <span className={`text-xs ${delta >= 0 ? "text-green-400" : "text-red-400"}`}>
                         ({formatCurrency(delta)})
