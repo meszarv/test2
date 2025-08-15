@@ -1,7 +1,12 @@
 import { useEffect, useRef } from "react";
 import { formatCurrency } from "../utils.js";
 
-export default function LineChart({ data }) {
+export default function LineChart({
+  data,
+  showGridlines = true,
+  showVerticalGridlines = false,
+  showMarkers = true,
+}) {
   const canvasRef = useRef(null);
   const tooltipRef = useRef(null);
   const pointsRef = useRef([]);
@@ -44,8 +49,50 @@ export default function LineChart({ data }) {
       const ys = data.map((d) => d.value);
       const minY = Math.min(...ys);
       const maxY = Math.max(...ys);
-      const xToPx = (x) => padding + (x / Math.max(1, xs.length - 1)) * (width - 2 * padding);
-      const yToPx = (y) => height - padding - ((y - minY) / Math.max(1, maxY - minY)) * (height - 2 * padding);
+      const xToPx = (x) =>
+        padding + (x / Math.max(1, xs.length - 1)) * (width - 2 * padding);
+      const yToPx = (y) =>
+        height -
+        padding -
+        ((y - minY) / Math.max(1, maxY - minY)) * (height - 2 * padding);
+
+      // precompute tick positions
+      const yTickCount = 5;
+      const yRange = maxY - minY;
+      const yValues = [];
+      if (yRange === 0) yValues.push(minY);
+      else {
+        for (let i = 0; i <= yTickCount; i++) {
+          yValues.push(minY + (i / yTickCount) * yRange);
+        }
+      }
+      const maxXTicks = Math.min(xs.length, 6);
+      const xTickIdx = new Set();
+      for (let i = 0; i < maxXTicks; i++) {
+        const idx = Math.round((i / Math.max(1, maxXTicks - 1)) * (xs.length - 1));
+        xTickIdx.add(idx);
+      }
+
+      // gridlines
+      if (showGridlines) {
+        ctx.strokeStyle = "#3a3a3a";
+        for (const val of yValues) {
+          const py = yToPx(val);
+          ctx.beginPath();
+          ctx.moveTo(padding, py);
+          ctx.lineTo(width - padding, py);
+          ctx.stroke();
+        }
+        if (showVerticalGridlines) {
+          for (const idx of xTickIdx) {
+            const px = xToPx(xs[idx]);
+            ctx.beginPath();
+            ctx.moveTo(px, padding);
+            ctx.lineTo(px, height - padding);
+            ctx.stroke();
+          }
+        }
+      }
 
       const points = [];
       ctx.beginPath();
@@ -68,17 +115,8 @@ export default function LineChart({ data }) {
       ctx.fillStyle = "#e8eaed";
 
       // y-axis ticks and labels
-      const yTickCount = 5;
-      const yRange = maxY - minY;
       ctx.textAlign = "right";
       ctx.textBaseline = "middle";
-      const yValues = [];
-      if (yRange === 0) yValues.push(minY);
-      else {
-        for (let i = 0; i <= yTickCount; i++) {
-          yValues.push(minY + (i / yTickCount) * yRange);
-        }
-      }
       for (const val of yValues) {
         const py = yToPx(val);
         ctx.beginPath();
@@ -89,12 +127,6 @@ export default function LineChart({ data }) {
       }
 
       // x-axis ticks and labels
-      const maxXTicks = Math.min(xs.length, 6);
-      const xTickIdx = new Set();
-      for (let i = 0; i < maxXTicks; i++) {
-        const idx = Math.round((i / Math.max(1, maxXTicks - 1)) * (xs.length - 1));
-        xTickIdx.add(idx);
-      }
       ctx.textAlign = "center";
       ctx.textBaseline = "top";
       for (const idx of xTickIdx) {
@@ -109,6 +141,26 @@ export default function LineChart({ data }) {
 
       ctx.textAlign = "left";
       ctx.textBaseline = "alphabetic";
+
+      // markers for high/low
+      if (showMarkers) {
+        const maxIdx = ys.indexOf(maxY);
+        const minIdx = ys.indexOf(minY);
+        ctx.font = `${10 * dpr}px ui-sans-serif`;
+        const high = points[maxIdx];
+        ctx.fillStyle = "#16a34a";
+        ctx.beginPath();
+        ctx.arc(high.x, high.y, 3 * dpr, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillText("High", high.x + 4 * dpr, high.y - 6 * dpr);
+
+        const low = points[minIdx];
+        ctx.fillStyle = "#dc2626";
+        ctx.beginPath();
+        ctx.arc(low.x, low.y, 3 * dpr, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillText("Low", low.x + 4 * dpr, low.y + 12 * dpr);
+      }
 
       const last = data[data.length - 1];
       const lx = xToPx(xs[xs.length - 1]);
@@ -172,7 +224,7 @@ export default function LineChart({ data }) {
       canvas.removeEventListener("mousemove", handleMove);
       canvas.removeEventListener("mouseout", handleOut);
     };
-  }, [data]);
+  }, [data, showGridlines, showVerticalGridlines, showMarkers]);
 
   return (
     <div className="relative">

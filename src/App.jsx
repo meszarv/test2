@@ -163,15 +163,27 @@ export default function App() {
                 <RebalancePlan data={rebalancePlanData} assetTypes={assetTypes} />
               </Section>
 
-              <Section title="History view" right={
-                <select value={period} onChange={(e) => setPeriod(e.target.value)} className="bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1 text-sm">
-                  <option value="monthly">Monthly</option>
-                  <option value="yearly">Yearly</option>
-                </select>
-              }>
-                <LineChart data={series} />
-              </Section>
-            </div>
+                <Section
+                  title="History view"
+                  right={
+                    <select
+                      value={period}
+                      onChange={(e) => setPeriod(e.target.value)}
+                      className="bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1 text-sm"
+                    >
+                      <option value="monthly">Monthly</option>
+                      <option value="yearly">Yearly</option>
+                    </select>
+                  }
+                >
+                  <LineChart
+                    data={series}
+                    showGridlines={series.length > 2}
+                    showMarkers={series.length > 2}
+                    showVerticalGridlines={period === "monthly"}
+                  />
+                </Section>
+              </div>
 
             <Section title="Assets">
               <SnapshotTabs
