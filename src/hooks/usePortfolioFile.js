@@ -8,7 +8,7 @@ import {
   clearSavedFile,
 } from "../file.js";
 import { defaultAssetTypes } from "../data.js";
-import { mkAsset, mkId, labelFor } from "../utils.js";
+import { mkId, labelFor } from "../utils.js";
 
 export default function usePortfolioFile({
   assets,
@@ -146,14 +146,9 @@ export default function usePortfolioFile({
       setPassword("");
       setSnapshots([]);
       setCurrentIndex(0);
-      const initialAssets = [
-        mkAsset("cash", defaultAssetTypes, "Cash"),
-        mkAsset("real_estate", defaultAssetTypes, "Real estate"),
-        mkAsset("stock", defaultAssetTypes, "Stock"),
-      ];
-      setAssets(initialAssets);
-      snapshotFromAssets(initialAssets);
-      setAllocation({ cash: 20, real_estate: 50, stock: 30 });
+      setAssets([]);
+      snapshotFromAssets([]);
+      setAllocation({});
       setStep("pick");
     } catch (e) {
       setError(e && e.message ? e.message : String(e));

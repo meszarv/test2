@@ -13,15 +13,12 @@ import { mkAsset, formatCurrency } from "./utils.js";
 import { defaultAssetTypes, netWorth, rebalance, buildSeries, currentByCategory } from "./data.js";
 import useSnapshots from "./hooks/useSnapshots.js";
 import usePortfolioFile from "./hooks/usePortfolioFile.js";
+import pkg from "../package.json";
 
 export default function App() {
   const [assetTypes, setAssetTypes] = useState(defaultAssetTypes);
-  const [assets, setAssets] = useState([
-    mkAsset("cash", defaultAssetTypes, "Cash"),
-    mkAsset("real_estate", defaultAssetTypes, "Real estate"),
-    mkAsset("stock", defaultAssetTypes, "Stock"),
-  ]);
-  const [allocation, setAllocation] = useState({ cash: 20, real_estate: 50, stock: 30 });
+  const [assets, setAssets] = useState([]);
+  const [allocation, setAllocation] = useState({});
   const [period, setPeriod] = useState("monthly");
   const [configOpen, setConfigOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
@@ -93,6 +90,13 @@ export default function App() {
     setAssetsAndUpdateSnapshot(
       assets.map((a) => (a.id === updated.id ? updated : a))
     );
+  }
+
+  function handleDeleteAsset(a) {
+    if (confirm("Remove asset?")) {
+      setAssetsAndUpdateSnapshot(assets.filter((x) => x.id !== a.id));
+      setEditAsset(null);
+    }
   }
 
 
@@ -188,6 +192,7 @@ export default function App() {
             </Section>
 
         </div>
+        <footer className="text-center text-xs text-zinc-500 mt-12">v{pkg.version}</footer>
         <AddAssetModal open={addOpen} onClose={() => setAddOpen(false)} assetTypes={assetTypes} onAdd={handleAddAsset} />
         <EditAssetModal
           open={!!editAsset}
@@ -195,6 +200,7 @@ export default function App() {
           onClose={() => setEditAsset(null)}
           assetTypes={assetTypes}
           onSave={handleEditAsset}
+          onDelete={handleDeleteAsset}
         />
         {currentIndex === snapshots.length - 1 && (
           <button

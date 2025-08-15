@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import TextInput from "./TextInput.jsx";
 
-export default function EditAssetModal({ open, asset, onClose, assetTypes, onSave }) {
+export default function EditAssetModal({ open, asset, onClose, assetTypes, onSave, onDelete }) {
   const [name, setName] = useState("");
   const [type, setType] = useState("");
   const [description, setDescription] = useState("");
@@ -52,23 +52,33 @@ export default function EditAssetModal({ open, asset, onClose, assetTypes, onSav
             onChange={(e) => setDescription(e.target.value)}
           />
         </label>
-        <TextInput label="Value" type="number" value={value} onChange={setValue} />
-        <div className="flex justify-end gap-2 pt-2">
+        <TextInput label="Value" type="number" value={value} onChange={setValue} inputClassName="w-32" />
+        <div className="flex justify-between gap-2 pt-2">
           <button
             type="button"
-            onClick={onClose}
-            title="Close"
-            className="px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 hover:bg-zinc-700"
+            onClick={() => onDelete && onDelete(asset)}
+            title="Delete"
+            className="px-3 py-2 rounded-lg bg-red-700 hover:bg-red-600"
           >
-            ✖
+            🗑️
           </button>
-          <button
-            type="submit"
-            title="Save"
-            className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500"
-          >
-            💾
-          </button>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              title="Close"
+              className="px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 hover:bg-zinc-700"
+            >
+              ✖
+            </button>
+            <button
+              type="submit"
+              title="Save"
+              className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500"
+            >
+              💾
+            </button>
+          </div>
         </div>
       </form>
     </div>
