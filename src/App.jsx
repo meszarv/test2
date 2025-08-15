@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useRef } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Section from "./components/Section.jsx";
 import TextInput from "./components/TextInput.jsx";
 import LineChart from "./components/LineChart.jsx";
@@ -8,15 +8,12 @@ import AddAssetModal from "./components/AddAssetModal.jsx";
 import SnapshotTabs from "./components/SnapshotTabs.jsx";
 import RebalancePlan from "./components/RebalancePlan.jsx";
 import ConfigPage from "./components/ConfigPage.jsx";
-import { mkAsset, stripIds, formatCurrency, mkId, labelFor } from "./utils.js";
+import { mkAsset, formatCurrency } from "./utils.js";
 import { defaultAssetTypes, netWorth, rebalance, buildSeries, currentByCategory } from "./data.js";
-import { openExistingFile, createNewFile, getSavedFile, readPortfolioFile, writePortfolioFile, clearSavedFile } from "./file.js";
+import useSnapshots from "./hooks/useSnapshots.js";
+import usePortfolioFile from "./hooks/usePortfolioFile.js";
 
 export default function App() {
-  const [password, setPassword] = useState("");
-  const [fileHandle, setFileHandle] = useState(null);
-  const [snapshots, setSnapshots] = useState([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
   const [assetTypes, setAssetTypes] = useState(defaultAssetTypes);
   const [assets, setAssets] = useState([
     mkAsset("cash", defaultAssetTypes, "Cash"),
@@ -24,46 +21,58 @@ export default function App() {
     mkAsset("stock", defaultAssetTypes, "Stock"),
   ]);
   const [allocation, setAllocation] = useState({ cash: 20, real_estate: 50, stock: 30 });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
   const [period, setPeriod] = useState("monthly");
-  const [step, setStep] = useState("pick");
   const [configOpen, setConfigOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
-  const [dirty, setDirty] = useState(false);
-  const skipDirty = useRef(true);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const saved = await getSavedFile();
-        if (saved && saved.queryPermission) {
-          const perm = await saved.queryPermission({ mode: "readwrite" });
-          if (perm === "granted" || perm === "prompt") {
-            setFileHandle(saved);
-            setStep("password");
-          } else {
-            await clearSavedFile();
-          }
-        }
-      } catch (e) {
-        console.warn("No saved handle", e);
-      }
-    })();
-  }, []);
+  const {
+    snapshots,
+    setSnapshots,
+    currentIndex,
+    setCurrentIndex,
+    snapshotFromAssets,
+    setAssetsAndUpdateSnapshot,
+    handleSelectSnapshot,
+    handleAddSnapshot,
+    handleChangeSnapshotDate,
+    handleDeleteSnapshot,
+  } = useSnapshots({ assets, setAssets, assetTypes });
+
+  const {
+    password,
+    setPassword,
+    fileHandle,
+    setFileHandle,
+    step,
+    setStep,
+    loading,
+    error,
+    setError,
+    dirty,
+    setDirty,
+    skipDirty,
+    handleOpenExisting,
+    handleCreateNew,
+    handleLoad,
+    handleSave,
+    handleCloseFile,
+  } = usePortfolioFile({
+    assets,
+    setAssets,
+    assetTypes,
+    setAssetTypes,
+    allocation,
+    setAllocation,
+    snapshots,
+    setSnapshots,
+    snapshotFromAssets,
+    setCurrentIndex,
+  });
 
   useEffect(() => {
     snapshotFromAssets(assets);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  useEffect(() => {
-    if (skipDirty.current) {
-      skipDirty.current = false;
-      return;
-    }
-    setDirty(true);
-  }, [assetTypes, allocation, snapshots]);
 
   const totalNow = useMemo(() => netWorth(assets), [assets]);
   const series = useMemo(() => buildSeries(snapshots, period), [snapshots, period]);
@@ -71,172 +80,11 @@ export default function App() {
   const prevAssets = useMemo(() => (currentIndex > 0 ? snapshots[currentIndex - 1]?.assets || [] : []), [snapshots, currentIndex]);
   const currentAllocation = useMemo(() => currentByCategory(assets), [assets]);
 
-  function snapshotFromAssets(nextAssets, date = new Date()) {
-    setSnapshots((prev) => {
-      const iso = date.toISOString();
-      const month = iso.slice(0, 7);
-      const snap = { asOf: iso, assets: nextAssets.map(stripIds) };
-      const existing = prev.findIndex((p) => p.asOf.slice(0, 7) === month);
-      let s;
-      if (existing >= 0) {
-        s = prev.map((p, i) => (i === existing ? snap : p));
-        setCurrentIndex(existing);
-      } else {
-        s = [...prev, snap].sort((a, b) => new Date(a.asOf) - new Date(b.asOf));
-        setCurrentIndex(s.indexOf(snap));
-      }
-      return s;
-    });
-  }
-
-  function setAssetsAndUpdateSnapshot(next) {
-    setAssets(next);
-    setSnapshots((prev) =>
-      prev.map((s, i) => (i === currentIndex ? { ...s, assets: next.map(stripIds) } : s))
-    );
-  }
-
-  function handleSelectSnapshot(i) {
-    const snap = snapshots[i];
-    if (!snap) return;
-    setCurrentIndex(i);
-    setAssets((snap.assets || []).map((a) => ({ ...a, id: mkId(), name: a.name || labelFor(a.type, assetTypes) })));
-  }
-
   function handleAddAsset({ name, type, description, value }) {
     const asset = mkAsset(type, assetTypes, name);
     asset.description = description;
     asset.value = value;
     setAssetsAndUpdateSnapshot([...assets, asset]);
-  }
-
-  function handleAddSnapshot() {
-    snapshotFromAssets(assets);
-  }
-
-  function handleChangeSnapshotDate(i, date) {
-    setSnapshots((prev) => {
-      const iso = date.toISOString();
-      const month = iso.slice(0, 7);
-      if (prev.some((s, idx) => idx !== i && s.asOf.slice(0, 7) === month)) {
-        alert("Snapshot already exists for this month");
-        return prev;
-      }
-      const updated = { ...prev[i], asOf: iso };
-      const next = prev.map((s, idx) => (idx === i ? updated : s));
-      const sorted = next.slice().sort((a, b) => new Date(a.asOf) - new Date(b.asOf));
-      setCurrentIndex(sorted.indexOf(updated));
-      return sorted;
-    });
-  }
-
-  function handleDeleteSnapshot(i) {
-    setSnapshots((prev) => {
-      const next = prev.filter((_, idx) => idx !== i);
-      let newIdx = currentIndex;
-      if (i === currentIndex) newIdx = Math.min(i, next.length - 1);
-      else if (i < currentIndex) newIdx = currentIndex - 1;
-      newIdx = Math.max(0, newIdx);
-      const snap = next[newIdx];
-      if (snap) {
-        setAssets((snap.assets || []).map((a) => ({ ...a, id: mkId(), name: a.name || labelFor(a.type, assetTypes) }))); 
-      }
-      setCurrentIndex(newIdx);
-      return next;
-    });
-  }
-
-  async function handleOpenExisting() {
-    try {
-      const h = await openExistingFile();
-      setFileHandle(h);
-      setStep("password");
-    } catch (e) {
-      setError(e && e.message ? e.message : String(e));
-    }
-  }
-
-  async function handleCreateNew() {
-    try {
-      const h = await createNewFile();
-      setFileHandle(h);
-      setStep("password");
-    } catch (e) {
-      setError(e && e.message ? e.message : String(e));
-    }
-  }
-
-  async function handleLoad() {
-    if (!fileHandle || !password) return setError("Pick a file and enter password first.");
-    setLoading(true); setError(null);
-    try {
-      const file = await fileHandle.getFile();
-      const isEmpty = file.size === 0;
-      const data = await readPortfolioFile(fileHandle, password);
-      if (isEmpty) {
-        await writePortfolioFile(fileHandle, password, data);
-      }
-      const snaps = (data.snapshots || []).slice().sort((a, b) => new Date(a.asOf) - new Date(b.asOf));
-      setSnapshots(snaps);
-      const latest = snaps[snaps.length - 1];
-      if (latest) {
-        setAssets((latest.assets || []).map((a) => ({ ...a, id: mkId(), name: a.name || labelFor(a.type, assetTypes) }))); 
-        setCurrentIndex(snaps.length - 1);
-      } else {
-        snapshotFromAssets(assets);
-      }
-      setAllocation(data.allocation || {});
-      setAssetTypes(data.assetTypes || defaultAssetTypes);
-      setStep("main");
-      setDirty(false); skipDirty.current = true;
-    } catch (e) {
-      if (e && (e.name === "NotAllowedError" || e.name === "NotFoundError")) {
-        await clearSavedFile();
-        setFileHandle(null);
-        setStep("pick");
-        setError("Cannot access saved file. Please pick it again.");
-      } else {
-        setError(e && e.message ? e.message : String(e));
-      }
-    } finally { setLoading(false); }
-  }
-
-  async function handleSave() {
-    if (!fileHandle || !password) return setError("Pick a file and enter password first.");
-    setLoading(true); setError(null);
-    try {
-      const data = { version: 1, assetTypes, allocation, snapshots };
-      await writePortfolioFile(fileHandle, password, data);
-      setDirty(false); skipDirty.current = true;
-    } catch (e) {
-      setError(e && e.message ? e.message : String(e));
-    } finally { setLoading(false); }
-  }
-
-  async function handleCloseFile() {
-    if (!fileHandle) return;
-    setLoading(true); setError(null);
-    try {
-      const data = { version: 1, assetTypes, allocation, snapshots };
-      await writePortfolioFile(fileHandle, password, data);
-      setDirty(false); skipDirty.current = true;
-      await clearSavedFile();
-      setFileHandle(null);
-      setPassword("");
-      setSnapshots([]);
-      setCurrentIndex(0);
-      const initialAssets = [
-        mkAsset("cash", defaultAssetTypes, "Cash"),
-        mkAsset("real_estate", defaultAssetTypes, "Real estate"),
-        mkAsset("stock", defaultAssetTypes, "Stock"),
-      ];
-      setAssets(initialAssets);
-      snapshotFromAssets(initialAssets);
-      setAllocation({ cash: 20, real_estate: 50, stock: 30 });
-      setStep("pick");
-    } catch (e) {
-      setError(e && e.message ? e.message : String(e));
-    } finally { setLoading(false); }
   }
 
   return (

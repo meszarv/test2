@@ -31,7 +31,7 @@ export default function SnapshotTabs({ snapshots, currentIndex, onSelect, onAdd,
           .sort((a, b) => new Date(a.s.asOf) - new Date(b.s.asOf))
           .map(({ s, i }) => (
             <button
-              key={i}
+              key={s.asOf}
               onClick={(e) => {
                 if (e.detail === 3) startEdit(i);
                 else onSelect(i);

@@ -1,5 +1,5 @@
 export function mkId() {
-  return Math.random().toString(36).slice(2);
+  return crypto.randomUUID();
 }
 
 export const pieColors = [
