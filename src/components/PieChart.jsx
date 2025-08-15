@@ -1,20 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { pieColors, formatCurrency } from "../utils.js";
+import { pieColors } from "../utils.js";
 
-function darken(hex, amt) {
-  let col = hex.replace("#", "");
-  if (col.length === 3) col = col.split("").map((c) => c + c).join("");
-  const num = parseInt(col, 16);
-  let r = (num >> 16) + amt;
-  let g = ((num >> 8) & 0xff) + amt;
-  let b = (num & 0xff) + amt;
-  r = Math.max(0, Math.min(255, r));
-  g = Math.max(0, Math.min(255, g));
-  b = Math.max(0, Math.min(255, b));
-  return `#${[r, g, b].map((x) => x.toString(16).padStart(2, "0")).join("")}`;
-}
-
-export default function PieChart({ data, targetData, showTarget = true }) {
+export default function PieChart({ data, targetData, showTarget = false, assetTypes = {} }) {
   const ref = useRef(null);
   const arcsRef = useRef([]);
   const metricsRef = useRef({ cx: 0, cy: 0, radius: 0 });
@@ -46,10 +33,9 @@ export default function PieChart({ data, targetData, showTarget = true }) {
           ...Object.keys(targetData || {}),
         ])
       );
-      const entries = labels.map((l) => [l, data?.[l] || 0]);
-      const targetEntries = labels.map((l) => [l, targetData?.[l] || 0]);
-      const total =
-        entries.reduce((a, [, v]) => a + (Number(v) || 0), 0) || 1;
+      const source = showTarget ? targetData : data;
+      const entries = labels.map((l) => [l, source?.[l] || 0]);
+      const total = entries.reduce((a, [, v]) => a + (Number(v) || 0), 0) || 1;
       totalRef.current = total;
       let start = -Math.PI / 2;
       const radius = Math.min(width, height) / 2 - 8 * dpr;
@@ -72,7 +58,7 @@ export default function PieChart({ data, targetData, showTarget = true }) {
           const mid = start + angle / 2;
           const labelRadius = radius * 0.6;
           const percentLabel = percentFmt.format(val / total);
-          const text = `${formatCurrency(val)} – ${percentLabel}`;
+          const text = `${percentLabel}`;
           ctx.font = `${12 * dpr}px sans-serif`;
           ctx.textBaseline = "middle";
           ctx.fillStyle = "#fff";
@@ -102,25 +88,6 @@ export default function PieChart({ data, targetData, showTarget = true }) {
         arcsRef.current.push({ start, end: start + angle, label, value: val });
         start += angle;
       });
-      if (targetData && showTarget) {
-        const targetTotal =
-          targetEntries.reduce((a, [, v]) => a + (Number(v) || 0), 0) || 1;
-        let tStart = -Math.PI / 2;
-        const ringWidth = 12 * dpr;
-        const ringGap = 8 * dpr;
-        const ringRadius = radius - ringWidth / 2 - ringGap;
-        targetEntries.forEach(([label, value], i) => {
-          const val = Number(value) || 0;
-          const angle = (val / targetTotal) * Math.PI * 2;
-          const color = darken(pieColors[i % pieColors.length], -40);
-          ctx.strokeStyle = color;
-          ctx.lineWidth = ringWidth;
-          ctx.beginPath();
-          ctx.arc(cx, cy, ringRadius, tStart, tStart + angle);
-          ctx.stroke();
-          tStart += angle;
-        });
-      }
     }
 
     function handleMove(e) {
@@ -145,7 +112,6 @@ export default function PieChart({ data, targetData, showTarget = true }) {
         if (ang >= arc.start && ang < arc.end) {
           setHover({
             label: arc.label,
-            value: arc.value,
             percent: arc.value / total,
             x: e.clientX - rect.left,
             y: e.clientY - rect.top,
@@ -184,20 +150,8 @@ export default function PieChart({ data, targetData, showTarget = true }) {
           className="absolute pointer-events-none bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs"
           style={{ left: hover.x, top: hover.y }}
         >
-          <div>{hover.label}</div>
-          <div>{percentFmt.format(hover.percent)} – {formatCurrency(hover.value)}</div>
-        </div>
-      )}
-      {targetData && showTarget && (
-        <div className="flex justify-center gap-4 mt-2 text-xs text-zinc-400">
-          <div className="flex items-center gap-1">
-            <span className="block w-3 h-3 rounded-full bg-zinc-400" />
-            Current
-          </div>
-          <div className="flex items-center gap-1">
-            <span className="block w-3 h-3 rounded-full border border-zinc-400" />
-            Target
-          </div>
+          <div>{assetTypes[hover.label]?.name || hover.label}</div>
+          <div>{percentFmt.format(hover.percent)}</div>
         </div>
       )}
     </div>
