@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { pieColors, formatCurrency } from "../utils.js";
 
-export default function PieChart({ data, showLabels = false }) {
+export default function PieChart({ data, targetData, showLabels = false }) {
   const ref = useRef(null);
   useEffect(() => {
     const canvas = ref.current;
@@ -16,9 +16,16 @@ export default function PieChart({ data, showLabels = false }) {
       canvas.width = width;
       canvas.height = height;
       ctx.clearRect(0, 0, width, height);
-
-      const entries = Object.entries(data || {});
-      const total = entries.reduce((a, [, v]) => a + (Number(v) || 0), 0) || 1;
+      const labels = Array.from(
+        new Set([
+          ...Object.keys(data || {}),
+          ...Object.keys(targetData || {}),
+        ])
+      );
+      const entries = labels.map((l) => [l, data?.[l] || 0]);
+      const targetEntries = labels.map((l) => [l, targetData?.[l] || 0]);
+      const total =
+        entries.reduce((a, [, v]) => a + (Number(v) || 0), 0) || 1;
       let start = -Math.PI / 2;
       const radius = Math.min(width, height) / 2 - 8 * dpr;
       const cx = width / 2;
@@ -70,11 +77,48 @@ export default function PieChart({ data, showLabels = false }) {
         }
         start += angle;
       });
+      if (targetData) {
+        const targetTotal =
+          targetEntries.reduce((a, [, v]) => a + (Number(v) || 0), 0) || 1;
+        let tStart = -Math.PI / 2;
+        const ringWidth = 12 * dpr;
+        const ringRadius = radius - ringWidth / 2;
+        targetEntries.forEach(([label, value], i) => {
+          const val = Number(value) || 0;
+          const angle = (val / targetTotal) * Math.PI * 2;
+          const color = pieColors[i % pieColors.length];
+          ctx.strokeStyle = color;
+          ctx.lineWidth = ringWidth;
+          ctx.beginPath();
+          ctx.arc(cx, cy, ringRadius, tStart, tStart + angle);
+          ctx.stroke();
+          tStart += angle;
+        });
+      }
     }
 
     draw();
     window.addEventListener("resize", draw);
     return () => window.removeEventListener("resize", draw);
-  }, [data, showLabels]);
-  return <canvas ref={ref} className="w-full h-40 rounded border border-zinc-800 bg-zinc-900" />;
+  }, [data, targetData, showLabels]);
+  return (
+    <div>
+      <canvas
+        ref={ref}
+        className="w-full h-40 rounded border border-zinc-800 bg-zinc-900"
+      />
+      {targetData && (
+        <div className="flex justify-center gap-4 mt-2 text-xs text-zinc-400">
+          <div className="flex items-center gap-1">
+            <span className="block w-3 h-3 rounded-full bg-zinc-400" />
+            Current
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="block w-3 h-3 rounded-full border border-zinc-400" />
+            Target
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
