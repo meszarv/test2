@@ -157,7 +157,7 @@ export default function App() {
               <Section title="Net worth (current)">
                 <div className="text-3xl font-semibold">{formatCurrency(totalNow)}</div>
                 <div className="text-xs text-zinc-400 mt-1">Computed from asset list</div>
-                <PieChart data={currentAllocation} />
+                <PieChart data={currentAllocation} targetData={rebalancePlanData.idealByCat} />
               </Section>
 
               <Section title="Rebalance">
