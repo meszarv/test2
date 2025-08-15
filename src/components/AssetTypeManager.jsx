@@ -1,27 +1,16 @@
 import TextInput from "./TextInput.jsx";
+import { mkId } from "../utils.js";
 
 export default function AssetTypeManager({ assetTypes, setAssetTypes, assets }) {
-  function slugify(str) {
-    return str.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
-  }
-  function updateLabel(key, label) {
+  function updateName(key, name) {
     const def = assetTypes[key];
-    setAssetTypes({ ...assetTypes, [key]: { ...def, label } });
-  }
-  function updateFields(key, value) {
-    const fields = value
-      .split(",")
-      .map((s) => slugify(s.trim()))
-      .filter(Boolean);
-    const def = assetTypes[key];
-    setAssetTypes({ ...assetTypes, [key]: { ...def, fields } });
+    setAssetTypes({ ...assetTypes, [key]: { ...def, name } });
   }
   function addType() {
-    const label = window.prompt("New type label", "new type");
-    if (!label) return;
-    const key = slugify(label);
-    if (assetTypes[key]) return alert("Type exists");
-    setAssetTypes({ ...assetTypes, [key]: { label, fields: [] } });
+    const name = window.prompt("New asset type", "New type");
+    if (!name) return;
+    const key = mkId();
+    setAssetTypes({ ...assetTypes, [key]: { name } });
   }
   function removeType(key) {
     if (assets && assets.some((a) => a.type === key)) {
@@ -37,16 +26,11 @@ export default function AssetTypeManager({ assetTypes, setAssetTypes, assets }) 
       {Object.entries(assetTypes).map(([k, def]) => (
         <div key={k} className="border border-zinc-800 bg-zinc-900/60 rounded-xl p-3 space-y-2">
           <div className="flex items-end gap-2">
-            <TextInput label="Label" value={def.label} onChange={(v) => updateLabel(k, v)} className="md:col-span-3" />
+            <TextInput label="Name" value={def.name} onChange={(v) => updateName(k, v)} className="md:col-span-3" />
             <div className="flex-1 text-right">
               <button onClick={() => removeType(k)} title="Delete" className="h-10 w-10 rounded-lg bg-zinc-800 border border-zinc-700 hover:bg-zinc-700">🗑️</button>
             </div>
           </div>
-          <TextInput
-            label="Fields (comma-separated)"
-            value={(def.fields || []).join(", ")}
-            onChange={(v) => updateFields(k, v)}
-          />
         </div>
       ))}
       <button onClick={addType} title="Add type" className="px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 text-sm">➕</button>
