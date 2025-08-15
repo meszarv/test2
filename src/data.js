@@ -61,18 +61,30 @@ export function rebalance(assets, allocPct) {
 }
 
 export function groupByPeriod(points, mode) {
-  const fmt = (d) => (mode === "monthly" ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}` : `${d.getFullYear()}`);
+  const fmt = (d) =>
+    mode === "monthly"
+      ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+      : `${d.getFullYear()}`;
   const map = new Map();
   for (const p of points || []) {
     const key = fmt(p.date);
     const prev = map.get(key);
-    if (!prev || p.date.getTime() > prev.lastDate) map.set(key, { label: key, value: p.value, lastDate: p.date.getTime() });
+    const { date, ...rest } = p;
+    if (!prev || p.date.getTime() > prev.lastDate)
+      map.set(key, { label: key, lastDate: p.date.getTime(), ...rest });
   }
   return Array.from(map.values()).sort((a, b) => a.lastDate - b.lastDate);
 }
 
 export function buildSeries(snaps, period) {
-  const pts = (snaps || []).map((s) => ({ date: new Date(s.asOf), value: netWorth(s.assets || []) }));
+  const pts = (snaps || []).map((s) => {
+    const byCat = currentByCategory(s.assets || []);
+    return {
+      date: new Date(s.asOf),
+      value: netWorth(s.assets || []),
+      ...byCat,
+    };
+    });
   const grouped = groupByPeriod(pts, period);
-  return grouped;
+  return grouped.map(({ lastDate, ...rest }) => rest);
 }

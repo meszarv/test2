@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import Section from "./components/Section.jsx";
 import TextInput from "./components/TextInput.jsx";
 import LineChart from "./components/LineChart.jsx";
+import StackedAreaChart from "./components/StackedAreaChart.jsx";
 import PieChart from "./components/PieChart.jsx";
 import AssetTable from "./components/AssetTable.jsx";
 import AddAssetModal from "./components/AddAssetModal.jsx";
@@ -20,6 +21,7 @@ export default function App() {
   const [assets, setAssets] = useState([]);
   const [allocation, setAllocation] = useState({});
   const [period, setPeriod] = useState("monthly");
+  const [chartMode, setChartMode] = useState("total");
   const [configOpen, setConfigOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [editAsset, setEditAsset] = useState(null);
@@ -166,22 +168,42 @@ export default function App() {
                 <Section
                   title="History view"
                   right={
-                    <select
-                      value={period}
-                      onChange={(e) => setPeriod(e.target.value)}
-                      className="bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1 text-sm"
-                    >
-                      <option value="monthly">Monthly</option>
-                      <option value="yearly">Yearly</option>
-                    </select>
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={period}
+                        onChange={(e) => setPeriod(e.target.value)}
+                        className="bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1 text-sm"
+                      >
+                        <option value="monthly">Monthly</option>
+                        <option value="yearly">Yearly</option>
+                      </select>
+                      <div className="flex rounded-lg overflow-hidden border border-zinc-700 text-sm">
+                        <button
+                          onClick={() => setChartMode("total")}
+                          className={`px-2 py-1 ${chartMode === "total" ? "bg-blue-600" : "bg-zinc-800 hover:bg-zinc-700"}`}
+                        >
+                          Net worth
+                        </button>
+                        <button
+                          onClick={() => setChartMode("category")}
+                          className={`px-2 py-1 ${chartMode === "category" ? "bg-blue-600" : "bg-zinc-800 hover:bg-zinc-700"}`}
+                        >
+                          By category
+                        </button>
+                      </div>
+                    </div>
                   }
                 >
-                  <LineChart
-                    data={series}
-                    showGridlines={series.length > 2}
-                    showMarkers={series.length > 2}
-                    showVerticalGridlines={period === "monthly"}
-                  />
+                  {chartMode === "total" ? (
+                    <LineChart
+                      data={series}
+                      showGridlines={series.length > 2}
+                      showMarkers={series.length > 2}
+                      showVerticalGridlines={period === "monthly"}
+                    />
+                  ) : (
+                    <StackedAreaChart data={series} assetTypes={assetTypes} />
+                  )}
                 </Section>
               </div>
 
