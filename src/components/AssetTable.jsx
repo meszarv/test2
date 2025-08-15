@@ -3,7 +3,7 @@ import { formatCurrency } from "../utils.js";
 
 export default function AssetTable({ assets, prevAssets, setAssets, assetTypes, readOnly = false, onEdit }) {
   const [sort, setSort] = useState({ key: null, asc: true });
-  const prevMap = new Map((prevAssets || []).map((a) => [a.name, Number(a.value) || 0]));
+  const prevMap = new Map((prevAssets || []).map((a) => [a.id, Number(a.value) || 0]));
 
   function updateValue(id, value) {
     const val = Number(value || 0);
@@ -57,7 +57,7 @@ export default function AssetTable({ assets, prevAssets, setAssets, assetTypes, 
         </thead>
         <tbody>
           {sortedAssets.map((a) => {
-            const prev = prevMap.get(a.name) || 0;
+            const prev = prevMap.get(a.id) || 0;
             const delta = (Number(a.value) || 0) - prev;
             return (
               <tr
