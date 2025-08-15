@@ -2,14 +2,25 @@ export function mkId() {
   return Math.random().toString(36).slice(2);
 }
 
-export function labelFor(key) {
-  return key;
+export const pieColors = [
+  "#8ab4f8",
+  "#f28b82",
+  "#fbbc04",
+  "#34a853",
+  "#ff6d01",
+  "#a142f4",
+  "#00acc1",
+  "#ffab40",
+];
+
+export function labelFor(key, registry = {}) {
+  return registry[key]?.label || key;
 }
 
 export function mkAsset(type, registry, name = "") {
   const def = registry[type] || { fields: [] };
-  const out = { id: mkId(), type, name: name || type, value: 0 };
-  for (const f of def.fields) out[f.key] = f.default || "";
+  const out = { id: mkId(), type, name: name || def.label || type, value: 0 };
+  for (const k of def.fields || []) out[k] = "";
   return out;
 }
 

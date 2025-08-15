@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { pieColors } from "../utils.js";
 
 export default function PieChart({ data }) {
   const ref = useRef(null);
@@ -20,21 +21,11 @@ export default function PieChart({ data }) {
     const radius = Math.min(width, height) / 2 - 8 * dpr;
     const cx = width / 2;
     const cy = height / 2;
-    const colors = [
-      "#8ab4f8",
-      "#f28b82",
-      "#fbbc04",
-      "#34a853",
-      "#ff6d01",
-      "#a142f4",
-      "#00acc1",
-      "#ffab40",
-    ];
     entries.forEach(([label, value], i) => {
       const angle = ((Number(value) || 0) / total) * Math.PI * 2;
       ctx.beginPath();
       ctx.moveTo(cx, cy);
-      ctx.fillStyle = colors[i % colors.length];
+      ctx.fillStyle = pieColors[i % pieColors.length];
       ctx.arc(cx, cy, radius, start, start + angle);
       ctx.closePath();
       ctx.fill();

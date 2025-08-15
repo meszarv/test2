@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import Section from "./components/Section.jsx";
 import TextInput from "./components/TextInput.jsx";
 import LineChart from "./components/LineChart.jsx";
@@ -30,6 +30,8 @@ export default function App() {
   const [step, setStep] = useState("pick");
   const [configOpen, setConfigOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const skipDirty = useRef(true);
 
   useEffect(() => {
     (async () => {
@@ -54,6 +56,14 @@ export default function App() {
     snapshotFromAssets(assets);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (skipDirty.current) {
+      skipDirty.current = false;
+      return;
+    }
+    setDirty(true);
+  }, [assetTypes, allocation, snapshots]);
 
   const totalNow = useMemo(() => netWorth(assets), [assets]);
   const series = useMemo(() => buildSeries(snapshots, period), [snapshots, period]);
@@ -90,7 +100,7 @@ export default function App() {
     const snap = snapshots[i];
     if (!snap) return;
     setCurrentIndex(i);
-    setAssets((snap.assets || []).map((a) => ({ ...a, id: mkId(), name: a.name || labelFor(a.type) })));
+    setAssets((snap.assets || []).map((a) => ({ ...a, id: mkId(), name: a.name || labelFor(a.type, assetTypes) })));
   }
 
   function handleAddAsset({ name, type, value, ...fields }) {
@@ -129,7 +139,7 @@ export default function App() {
       newIdx = Math.max(0, newIdx);
       const snap = next[newIdx];
       if (snap) {
-        setAssets((snap.assets || []).map((a) => ({ ...a, id: mkId(), name: a.name || labelFor(a.type) })));
+        setAssets((snap.assets || []).map((a) => ({ ...a, id: mkId(), name: a.name || labelFor(a.type, assetTypes) }))); 
       }
       setCurrentIndex(newIdx);
       return next;
@@ -170,7 +180,7 @@ export default function App() {
       setSnapshots(snaps);
       const latest = snaps[snaps.length - 1];
       if (latest) {
-        setAssets((latest.assets || []).map((a) => ({ ...a, id: mkId(), name: a.name || labelFor(a.type) })));
+        setAssets((latest.assets || []).map((a) => ({ ...a, id: mkId(), name: a.name || labelFor(a.type, assetTypes) }))); 
         setCurrentIndex(snaps.length - 1);
       } else {
         snapshotFromAssets(assets);
@@ -178,6 +188,7 @@ export default function App() {
       setAllocation(data.allocation || {});
       setAssetTypes(data.assetTypes || defaultAssetTypes);
       setStep("main");
+      setDirty(false); skipDirty.current = true;
     } catch (e) {
       if (e && (e.name === "NotAllowedError" || e.name === "NotFoundError")) {
         await clearSavedFile();
@@ -190,13 +201,13 @@ export default function App() {
     } finally { setLoading(false); }
   }
 
-  async function handleSaveNew() {
+  async function handleSave() {
     if (!fileHandle || !password) return setError("Pick a file and enter password first.");
     setLoading(true); setError(null);
     try {
       const data = { version: 1, assetTypes, allocation, snapshots };
       await writePortfolioFile(fileHandle, password, data);
-      alert("Saved file");
+      setDirty(false); skipDirty.current = true;
     } catch (e) {
       setError(e && e.message ? e.message : String(e));
     } finally { setLoading(false); }
@@ -208,6 +219,7 @@ export default function App() {
     try {
       const data = { version: 1, assetTypes, allocation, snapshots };
       await writePortfolioFile(fileHandle, password, data);
+      setDirty(false); skipDirty.current = true;
       await clearSavedFile();
       setFileHandle(null);
       setPassword("");
@@ -238,6 +250,7 @@ export default function App() {
       )}
       {step === "password" && (
         <form onSubmit={(e) => { e.preventDefault(); handleLoad(); }} className="max-w-md mx-auto p-6 space-y-4">
+          {error && <div className="text-red-400">{error}</div>}
           <TextInput
             label="Password"
             type="password"
@@ -246,7 +259,8 @@ export default function App() {
             className="w-full"
             autoFocus
           />
-          <div className="flex justify-end">
+          <div className="flex justify-between">
+            <button type="button" onClick={() => { setFileHandle(null); setPassword(""); setError(null); setStep("pick"); }} className="h-10 px-3 rounded-lg bg-zinc-800 border border-zinc-700 hover:bg-zinc-700">Cancel</button>
             <button type="submit" className="h-10 px-3 rounded-lg bg-zinc-800 border border-zinc-700 hover:bg-zinc-700">Open</button>
           </div>
         </form>
@@ -260,6 +274,14 @@ export default function App() {
               <p className="text-sm text-zinc-400">Private by default · Encrypted portfolio file on your disk</p>
             </div>
             <div className="flex items-center gap-2">
+              <button
+                onClick={handleSave}
+                title="Save"
+                className={`h-10 w-10 rounded-lg border flex items-center justify-center text-xl ${dirty ? "bg-blue-600 hover:bg-blue-500 border-blue-500" : "bg-zinc-800 border-zinc-700 hover:bg-zinc-700"}`}
+              >
+                💾
+              </button>
+              {dirty && <span className="text-amber-400" title="Unsaved changes">●</span>}
               <button onClick={() => setConfigOpen(true)} className="h-10 w-10 rounded-lg bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 flex items-center justify-center text-xl">⚙</button>
               <button onClick={handleCloseFile} title="Close" className="h-10 w-10 rounded-lg bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 flex items-center justify-center text-xl">✖</button>
             </div>
@@ -277,7 +299,7 @@ export default function App() {
 
               <Section title="Rebalance">
                 <div className="text-sm text-zinc-400 mb-2">Cash above target allocation is distributed to under-allocated categories.</div>
-                <RebalancePlan data={rebalancePlanData} />
+                <RebalancePlan data={rebalancePlanData} assetTypes={assetTypes} />
               </Section>
 
               <Section title="History view" right={

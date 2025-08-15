@@ -38,7 +38,7 @@ export default function AssetTable({ assets, prevAssets, setAssets, assetTypes, 
       if (readOnly) return;
       const def = assetTypes[a.type] || { fields: [] };
       const draft = {};
-      for (const f of def.fields) draft[f.key] = a[f.key] || "";
+      for (const k of def.fields || []) draft[k] = a[k] || "";
       setFieldDraft(draft);
       setFieldEdit(a);
     }
@@ -68,11 +68,11 @@ export default function AssetTable({ assets, prevAssets, setAssets, assetTypes, 
             const prev = prevMap.get(a.name) || 0;
             const delta = (Number(a.value) || 0) - prev;
             const def = assetTypes[a.type] || { fields: [] };
-            const desc = def.fields.map((f) => `${f.label}: ${a[f.key] || ""}`).join(", ");
+            const desc = (def.fields || []).map((k) => `${k}: ${a[k] || ""}`).join(", ");
             return (
               <tr key={a.id} className="border-t border-zinc-800" onDoubleClick={() => openFields(a)}>
                 <td className="p-2">{a.name}</td>
-                <td className="p-2">{a.type}</td>
+                <td className="p-2">{assetTypes[a.type]?.label || a.type}</td>
                 <td className="p-2">{desc}</td>
                 <td className="p-2 text-right">{formatCurrency(prev)}</td>
                 <td className="p-2 text-right">
@@ -118,12 +118,12 @@ export default function AssetTable({ assets, prevAssets, setAssets, assetTypes, 
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4">
           <form onSubmit={(e) => { e.preventDefault(); saveFields(); }} className="bg-zinc-900 rounded-xl p-4 w-full max-w-sm space-y-3">
             <h2 className="text-lg font-medium">Edit {fieldEdit.name}</h2>
-            {(assetTypes[fieldEdit.type]?.fields || []).map((f, i) => (
+            {(assetTypes[fieldEdit.type]?.fields || []).map((k, i) => (
               <TextInput
-                key={f.key}
-                label={f.label}
-                value={fieldDraft[f.key] || ""}
-                onChange={(v) => setFieldDraft({ ...fieldDraft, [f.key]: v })}
+                key={k}
+                label={k}
+                value={fieldDraft[k] || ""}
+                onChange={(v) => setFieldDraft({ ...fieldDraft, [k]: v })}
                 autoFocus={i === 0}
               />
             ))}

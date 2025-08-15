@@ -29,7 +29,7 @@ export default function AssetList({ assets, setAssets, assetTypes }) {
     <div className="space-y-3">
       <div className="flex flex-wrap gap-2">
         {Object.keys(assetTypes).map((k) => (
-          <AddBtn key={k} onClick={() => add(k)}>Add {k}</AddBtn>
+          <AddBtn key={k} onClick={() => add(k)}>Add {assetTypes[k]?.label || k}</AddBtn>
         ))}
       </div>
       <div className="space-y-2">
@@ -46,18 +46,18 @@ export default function AssetList({ assets, setAssets, assetTypes }) {
                 >
                   {!assetTypes[a.type] && <option value={a.type}>{a.type}</option>}
                   {Object.keys(assetTypes).map((k) => (
-                    <option key={k} value={k}>{k}</option>
+                    <option key={k} value={k}>{assetTypes[k]?.label || k}</option>
                   ))}
                 </select>
               </div>
 
-              {def.fields.map((f) => (
+              {(def.fields || []).map((k) => (
                 <TextInput
-                  key={f.key}
+                  key={k}
                   className="md:col-span-3"
-                  label={f.label}
-                  value={a[f.key] || ""}
-                  onChange={(v) => update(a.id, { [f.key]: v })}
+                  label={k}
+                  value={a[k] || ""}
+                  onChange={(v) => update(a.id, { [k]: v })}
                 />
               ))}
 
