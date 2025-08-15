@@ -6,6 +6,7 @@ export default function SnapshotTabs({ snapshots, currentIndex, onSelect, onAdd,
   const [editValue, setEditValue] = useState("");
 
   const fmt = (d) => d.toLocaleString("default", { month: "short", year: "numeric" });
+  const hasCurrent = snapshots.some((s) => s.asOf.slice(0, 7) === new Date().toISOString().slice(0, 7));
 
   function startEdit(idx) {
     const snap = snapshots[idx];
@@ -42,12 +43,14 @@ export default function SnapshotTabs({ snapshots, currentIndex, onSelect, onAdd,
               {fmt(new Date(s.asOf))}
             </button>
           ))}
-        <button
-          onClick={onAdd}
-          className="px-3 py-1 rounded-t border border-zinc-700 bg-zinc-900 hover:bg-zinc-800"
-        >
-          {fmt(new Date())}
-        </button>
+        {!hasCurrent && (
+          <button
+            onClick={onAdd}
+            className="px-3 py-1 rounded-t border border-zinc-700 bg-zinc-900 hover:bg-zinc-800"
+          >
+            {fmt(new Date())}
+          </button>
+        )}
       </div>
       {editIndex !== null && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4">

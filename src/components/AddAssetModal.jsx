@@ -13,7 +13,7 @@ export default function AddAssetModal({ open, onClose, assetTypes, onAdd }) {
   useEffect(() => {
     const def = assetTypes[type] || { fields: [] };
     const init = {};
-    for (const f of def.fields) init[f.key] = f.default || "";
+    for (const k of def.fields || []) init[k] = "";
     setFields(init);
   }, [type, assetTypes]);
 
@@ -41,16 +41,16 @@ export default function AddAssetModal({ open, onClose, assetTypes, onAdd }) {
             onChange={(e) => setType(e.target.value)}
           >
             {Object.keys(assetTypes).map((k) => (
-              <option key={k} value={k}>{k}</option>
+              <option key={k} value={k}>{assetTypes[k]?.label || k}</option>
             ))}
           </select>
         </label>
-        {(assetTypes[type]?.fields || []).map((f) => (
+        {(assetTypes[type]?.fields || []).map((k) => (
           <TextInput
-            key={f.key}
-            label={f.label}
-            value={fields[f.key] || ""}
-            onChange={(v) => setFields({ ...fields, [f.key]: v })}
+            key={k}
+            label={k}
+            value={fields[k] || ""}
+            onChange={(v) => setFields({ ...fields, [k]: v })}
           />
         ))}
         <TextInput label="Value" type="number" value={value} onChange={setValue} />
