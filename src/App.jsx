@@ -25,7 +25,7 @@ export default function App() {
   const [configOpen, setConfigOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [editAsset, setEditAsset] = useState(null);
-  const [showTarget, setShowTarget] = useState(true);
+  const [showTarget, setShowTarget] = useState(false);
 
   const {
     snapshots,
@@ -159,15 +159,15 @@ export default function App() {
               <Section
                 title="Net worth (current)"
                 right={
-                  <label className="flex items-center gap-1 text-xs">
-                    <input
-                      type="checkbox"
-                      className="accent-blue-600"
-                      checked={showTarget}
-                      onChange={(e) => setShowTarget(e.target.checked)}
-                    />
-                    Show target
-                  </label>
+                  <button
+                    onMouseDown={() => setShowTarget(true)}
+                    onMouseUp={() => setShowTarget(false)}
+                    onMouseLeave={() => setShowTarget(false)}
+                    className="px-2 py-1 rounded bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 text-xs"
+                    title="Show target while held"
+                  >
+                    Target
+                  </button>
                 }
               >
                 <div className="text-3xl font-semibold">{formatCurrency(totalNow)}</div>
@@ -176,6 +176,7 @@ export default function App() {
                   data={currentAllocation}
                   targetData={rebalancePlanData.idealByCat}
                   showTarget={showTarget}
+                  assetTypes={assetTypes}
                 />
               </Section>
 
