@@ -1,7 +1,7 @@
 import React from "react";
 import { formatCurrency } from "../utils.js";
 
-export default function AssetTable({ assets, prevAssets, setAssets, assetTypes, readOnly = false }) {
+export default function AssetTable({ assets, prevAssets, setAssets, assetTypes, readOnly = false, onEdit }) {
   const prevMap = new Map((prevAssets || []).map((a) => [a.name, Number(a.value) || 0]));
 
   function updateValue(id, value) {
@@ -33,24 +33,30 @@ export default function AssetTable({ assets, prevAssets, setAssets, assetTypes, 
             const prev = prevMap.get(a.name) || 0;
             const delta = (Number(a.value) || 0) - prev;
             return (
-              <tr key={a.id} className="border-t border-zinc-800">
+              <tr
+                key={a.id}
+                className="border-t border-zinc-800"
+                onDoubleClick={() => !readOnly && onEdit && onEdit(a)}
+              >
                 <td className="p-2">{a.name}</td>
                 <td className="p-2">{assetTypes[a.type]?.name || a.type}</td>
                 <td className="p-2 text-xs whitespace-pre-line">{a.description}</td>
                 <td className="p-2 text-right">
-                  <input
-                    type="number"
-                    value={a.value}
-                    onChange={(e) => updateValue(a.id, e.target.value)}
-                    onFocus={(e) => e.target.select()}
-                    className="w-full bg-transparent border border-transparent text-right px-1 py-1 rounded focus:bg-zinc-800 focus:border-blue-500 focus:outline-none"
-                    readOnly={readOnly}
-                  />
-                  {delta ? (
-                    <span className={`ml-2 text-xs ${delta >= 0 ? "text-green-400" : "text-red-400"}`}>
-                      ({formatCurrency(delta)})
-                    </span>
-                  ) : null}
+                  <div className="flex items-center justify-end gap-2">
+                    <input
+                      type="number"
+                      value={a.value}
+                      onChange={(e) => updateValue(a.id, e.target.value)}
+                      onFocus={(e) => e.target.select()}
+                      className="bg-transparent border border-transparent text-right px-1 py-1 rounded focus:bg-zinc-800 focus:border-blue-500 focus:outline-none w-32"
+                      readOnly={readOnly}
+                    />
+                    {delta ? (
+                      <span className={`text-xs ${delta >= 0 ? "text-green-400" : "text-red-400"}`}>
+                        ({formatCurrency(delta)})
+                      </span>
+                    ) : null}
+                  </div>
                 </td>
                 <td className="p-2 text-right">
                   {!readOnly && (

@@ -5,6 +5,7 @@ import LineChart from "./components/LineChart.jsx";
 import PieChart from "./components/PieChart.jsx";
 import AssetTable from "./components/AssetTable.jsx";
 import AddAssetModal from "./components/AddAssetModal.jsx";
+import EditAssetModal from "./components/EditAssetModal.jsx";
 import SnapshotTabs from "./components/SnapshotTabs.jsx";
 import RebalancePlan from "./components/RebalancePlan.jsx";
 import ConfigPage from "./components/ConfigPage.jsx";
@@ -30,6 +31,7 @@ export default function App() {
   const [step, setStep] = useState("pick");
   const [configOpen, setConfigOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const [editAsset, setEditAsset] = useState(null);
   const [dirty, setDirty] = useState(false);
   const skipDirty = useRef(true);
 
@@ -110,6 +112,10 @@ export default function App() {
     setAssetsAndUpdateSnapshot([...assets, asset]);
   }
 
+  function handleEditAsset(updated) {
+    setAssetsAndUpdateSnapshot(assets.map((a) => (a.id === updated.id ? updated : a)));
+  }
+
   function handleAddSnapshot() {
     snapshotFromAssets(assets);
   }
@@ -185,8 +191,17 @@ export default function App() {
       } else {
         snapshotFromAssets(assets);
       }
-      setAllocation(data.allocation || {});
-      setAssetTypes(data.assetTypes || defaultAssetTypes);
+      const allocFromFile = data.allocation || {};
+      const allZero = Object.values(allocFromFile).length > 0 && Object.values(allocFromFile).every((v) => (Number(v) || 0) === 0);
+      const typesInFile = data.assetTypes || defaultAssetTypes;
+      let alloc = allocFromFile;
+      if (allZero) {
+        const keys = Object.keys(allocFromFile).length ? Object.keys(allocFromFile) : Object.keys(typesInFile);
+        const share = 100 / (keys.length || 1);
+        alloc = Object.fromEntries(keys.map((k) => [k, share]));
+      }
+      setAllocation(alloc);
+      setAssetTypes(typesInFile);
       setStep("main");
       setDirty(false); skipDirty.current = true;
     } catch (e) {
@@ -326,11 +341,19 @@ export default function App() {
                 prevAssets={prevAssets}
                 setAssets={setAssetsAndUpdateSnapshot}
                 assetTypes={assetTypes}
+                onEdit={(a) => setEditAsset(a)}
               />
             </Section>
 
         </div>
         <AddAssetModal open={addOpen} onClose={() => setAddOpen(false)} assetTypes={assetTypes} onAdd={handleAddAsset} />
+        <EditAssetModal
+          open={!!editAsset}
+          asset={editAsset}
+          onClose={() => setEditAsset(null)}
+          assetTypes={assetTypes}
+          onSave={handleEditAsset}
+        />
         {currentIndex === snapshots.length - 1 && (
           <button
             onClick={() => setAddOpen(true)}
