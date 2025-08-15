@@ -9,13 +9,6 @@ export default function AssetTable({ assets, prevAssets, setAssets, assetTypes, 
     setAssets(assets.map((a) => (a.id === id ? { ...a, value: val } : a)));
   }
 
-  function remove(id) {
-    if (readOnly) return;
-    if (confirm("Remove asset?")) {
-      setAssets(assets.filter((a) => a.id !== id));
-    }
-  }
-
   return (
     <>
       <table className="w-full text-sm">
@@ -25,7 +18,6 @@ export default function AssetTable({ assets, prevAssets, setAssets, assetTypes, 
             <th className="text-left p-2">Type</th>
             <th className="text-left p-2">Description</th>
             <th className="text-right p-2">Value</th>
-            <th className="p-2"></th>
           </tr>
         </thead>
         <tbody>
@@ -57,17 +49,6 @@ export default function AssetTable({ assets, prevAssets, setAssets, assetTypes, 
                       </span>
                     ) : null}
                   </div>
-                </td>
-                <td className="p-2 text-right">
-                  {!readOnly && (
-                    <button
-                      onClick={() => remove(a.id)}
-                      title="Remove"
-                      className="text-red-400 hover:text-red-300"
-                    >
-                      🗑️
-                    </button>
-                  )}
                 </td>
               </tr>
             );
