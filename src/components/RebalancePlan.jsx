@@ -1,7 +1,13 @@
 import { formatCurrency, labelFor, pieColors } from "../utils.js";
 
 export default function RebalancePlan({ data, assetTypes }) {
-  const cats = Object.keys(data.investPlan || {}).sort();
+  const cats = Array.from(
+    new Set([
+      ...Object.keys(data.byCat || {}),
+      ...Object.keys(data.idealByCat || {}),
+      ...Object.keys(data.investPlan || {}),
+    ])
+  ).sort();
   if (cats.length === 0) return null;
   const colorMap = {};
   Object.keys(data.byCat || {}).forEach((c, i) => {
