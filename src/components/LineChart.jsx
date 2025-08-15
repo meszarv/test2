@@ -52,6 +52,55 @@ export default function LineChart({ data }) {
       ctx.strokeStyle = "#8ab4f8";
       ctx.stroke();
 
+      // axis ticks
+      const tickLen = 4 * dpr;
+      ctx.strokeStyle = "#2a2a2a";
+      ctx.font = `${10 * dpr}px ui-sans-serif`;
+      ctx.fillStyle = "#e8eaed";
+
+      // y-axis ticks and labels
+      const yTickCount = 5;
+      const yRange = maxY - minY;
+      ctx.textAlign = "right";
+      ctx.textBaseline = "middle";
+      const yValues = [];
+      if (yRange === 0) yValues.push(minY);
+      else {
+        for (let i = 0; i <= yTickCount; i++) {
+          yValues.push(minY + (i / yTickCount) * yRange);
+        }
+      }
+      for (const val of yValues) {
+        const py = yToPx(val);
+        ctx.beginPath();
+        ctx.moveTo(padding, py);
+        ctx.lineTo(padding - tickLen, py);
+        ctx.stroke();
+        ctx.fillText(formatCurrency(val), padding - 2 * tickLen, py);
+      }
+
+      // x-axis ticks and labels
+      const maxXTicks = Math.min(xs.length, 6);
+      const xTickIdx = new Set();
+      for (let i = 0; i < maxXTicks; i++) {
+        const idx = Math.round((i / Math.max(1, maxXTicks - 1)) * (xs.length - 1));
+        xTickIdx.add(idx);
+      }
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
+      for (const idx of xTickIdx) {
+        const px = xToPx(xs[idx]);
+        ctx.beginPath();
+        ctx.moveTo(px, height - padding);
+        ctx.lineTo(px, height - padding + tickLen);
+        ctx.stroke();
+        const dateLabel = new Date(data[idx].label).toLocaleDateString();
+        ctx.fillText(dateLabel, px, height - padding + tickLen + 2 * dpr);
+      }
+
+      ctx.textAlign = "left";
+      ctx.textBaseline = "alphabetic";
+
       const last = data[data.length - 1];
       const lx = xToPx(xs[xs.length - 1]);
       const ly = yToPx(ys[ys.length - 1]);
