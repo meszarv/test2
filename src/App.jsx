@@ -103,10 +103,10 @@ export default function App() {
     setAssets((snap.assets || []).map((a) => ({ ...a, id: mkId(), name: a.name || labelFor(a.type, assetTypes) })));
   }
 
-  function handleAddAsset({ name, type, value, ...fields }) {
+  function handleAddAsset({ name, type, description, value }) {
     const asset = mkAsset(type, assetTypes, name);
+    asset.description = description;
     asset.value = value;
-    Object.assign(asset, fields);
     setAssetsAndUpdateSnapshot([...assets, asset]);
   }
 
@@ -334,7 +334,7 @@ export default function App() {
         {currentIndex === snapshots.length - 1 && (
           <button
             onClick={() => setAddOpen(true)}
-            className="fixed bottom-6 right-6 h-12 w-12 rounded-full bg-blue-600 hover:bg-blue-500 text-white text-3xl leading-none"
+            className="fixed bottom-6 right-6 z-50 h-12 w-12 rounded-full bg-blue-600 hover:bg-blue-500 text-white text-3xl leading-none shadow-lg"
           >
             +
           </button>

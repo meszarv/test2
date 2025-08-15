@@ -46,7 +46,7 @@ export default function SnapshotTabs({ snapshots, currentIndex, onSelect, onAdd,
         {!hasCurrent && (
           <button
             onClick={onAdd}
-            className="px-3 py-1 rounded-t border border-zinc-700 bg-zinc-900 hover:bg-zinc-800"
+            className="px-3 py-1 rounded-t border-2 border-dashed border-zinc-700 bg-zinc-900 hover:bg-zinc-800"
           >
             {fmt(new Date())}
           </button>

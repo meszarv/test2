@@ -1,10 +1,10 @@
 export const defaultAssetTypes = {
-  cash: { label: "Cash", fields: ["currency"] },
-  real_estate: { label: "Real estate", fields: ["description"] },
-  stock: { label: "Stock", fields: ["ticker"] },
-  private_equity: { label: "Private equity", fields: ["company"] },
-  bond: { label: "Bond", fields: ["issuer"] },
-  commodity: { label: "Commodity", fields: ["description"] },
+  cash: { name: "Cash" },
+  real_estate: { name: "Real estate" },
+  stock: { name: "Stock" },
+  private_equity: { name: "Private equity" },
+  bond: { name: "Bond" },
+  commodity: { name: "Commodity" },
 };
 
 export function netWorth(assets) {
@@ -30,7 +30,12 @@ export function normalizeAllocation(alloc) {
 export function rebalance(assets, allocPct) {
   const totalNow = netWorth(assets);
   const byCat = currentByCategory(assets);
-  const norm = normalizeAllocation(allocPct);
+  let norm = normalizeAllocation(allocPct);
+  if (Object.keys(norm).length === 0) {
+    const cats = Object.keys(byCat);
+    const share = 1 / (cats.length || 1);
+    norm = Object.fromEntries(cats.map((c) => [c, share]));
+  }
   const cats = Array.from(new Set([...Object.keys(byCat), ...Object.keys(norm)]));
 
   const idealByCat = {};

@@ -14,14 +14,18 @@ export const pieColors = [
 ];
 
 export function labelFor(key, registry = {}) {
-  return registry[key]?.label || key;
+  return registry[key]?.name || key;
 }
 
 export function mkAsset(type, registry, name = "") {
-  const def = registry[type] || { fields: [] };
-  const out = { id: mkId(), type, name: name || def.label || type, value: 0 };
-  for (const k of def.fields || []) out[k] = "";
-  return out;
+  const def = registry[type] || {};
+  return {
+    id: mkId(),
+    type,
+    name: name || def.name || type,
+    description: "",
+    value: 0,
+  };
 }
 
 export function stripIds(a) {
