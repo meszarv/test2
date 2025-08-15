@@ -2,12 +2,17 @@ import { useEffect, useRef } from "react";
 import { formatCurrency } from "../utils.js";
 
 export default function LineChart({ data }) {
-  const ref = useRef(null);
+  const canvasRef = useRef(null);
+  const tooltipRef = useRef(null);
+  const pointsRef = useRef([]);
+  const dimsRef = useRef({ dpr: 1, width: 0, height: 0, padding: 0 });
+
   useEffect(() => {
-    const canvas = ref.current;
+    const canvas = canvasRef.current;
     if (!canvas) return;
 
-    function draw() {
+    const HIT_RADIUS = 20; // pixels on canvas coordinate system
+    function draw(hoverIdx = null) {
       const dpr = window.devicePixelRatio || 1;
       const width = canvas.clientWidth * dpr;
       const height = canvas.clientHeight * dpr;
@@ -19,6 +24,7 @@ export default function LineChart({ data }) {
       ctx.clearRect(0, 0, width, height);
 
       const padding = 32 * dpr;
+      dimsRef.current = { dpr, width, height, padding };
       ctx.strokeStyle = "#2a2a2a";
       ctx.lineWidth = 1;
       ctx.beginPath();
@@ -41,13 +47,16 @@ export default function LineChart({ data }) {
       const xToPx = (x) => padding + (x / Math.max(1, xs.length - 1)) * (width - 2 * padding);
       const yToPx = (y) => height - padding - ((y - minY) / Math.max(1, maxY - minY)) * (height - 2 * padding);
 
+      const points = [];
       ctx.beginPath();
       for (let i = 0; i < xs.length; i++) {
         const x = xToPx(xs[i]);
         const y = yToPx(ys[i]);
+        points.push({ x, y, label: data[i].label, value: data[i].value });
         if (i === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       }
+      pointsRef.current = points;
       ctx.lineWidth = 2 * dpr;
       ctx.strokeStyle = "#8ab4f8";
       ctx.stroke();
@@ -107,11 +116,74 @@ export default function LineChart({ data }) {
       ctx.fillStyle = "#e8eaed";
       ctx.font = `${12 * dpr}px ui-sans-serif`;
       ctx.fillText(`${last.label}: ${formatCurrency(last.value)}`, lx - 100 * dpr, ly - 8 * dpr);
+
+      if (hoverIdx != null && points[hoverIdx]) {
+        const p = points[hoverIdx];
+        ctx.beginPath();
+        ctx.fillStyle = "#8ab4f8";
+        ctx.arc(p.x, p.y, 3 * dpr, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (tooltipRef.current) {
+          tooltipRef.current.textContent = `${p.label}: ${formatCurrency(p.value)}`;
+          tooltipRef.current.style.display = "block";
+          tooltipRef.current.style.left = `${p.x / dpr + 8}px`;
+          tooltipRef.current.style.top = `${p.y / dpr - 24}px`;
+        }
+      } else if (tooltipRef.current) {
+        tooltipRef.current.style.display = "none";
+      }
+    }
+
+    function handleMove(e) {
+      const { dpr, width, height, padding } = dimsRef.current;
+      const rect = canvas.getBoundingClientRect();
+      const x = (e.clientX - rect.left) * dpr;
+      const y = (e.clientY - rect.top) * dpr;
+      const points = pointsRef.current;
+      if (!points.length) return draw();
+
+      const ratio = (x - padding) / Math.max(1, width - 2 * padding);
+      const approx = Math.round(ratio * (points.length - 1));
+      let nearest = -1;
+      let minDist = Infinity;
+      for (let i = Math.max(0, approx - 2); i <= Math.min(points.length - 1, approx + 2); i++) {
+        const p = points[i];
+        const dist = Math.hypot(p.x - x, p.y - y);
+        if (dist < minDist) {
+          minDist = dist;
+          nearest = i;
+        }
+      }
+      if (minDist <= HIT_RADIUS * dpr) draw(nearest);
+      else draw();
+    }
+
+    function handleOut() {
+      draw();
     }
 
     draw();
     window.addEventListener("resize", draw);
-    return () => window.removeEventListener("resize", draw);
+    canvas.addEventListener("mousemove", handleMove);
+    canvas.addEventListener("mouseout", handleOut);
+    return () => {
+      window.removeEventListener("resize", draw);
+      canvas.removeEventListener("mousemove", handleMove);
+      canvas.removeEventListener("mouseout", handleOut);
+    };
   }, [data]);
-  return <canvas ref={ref} className="w-full h-64 rounded border border-zinc-800 bg-zinc-900" />;
+
+  return (
+    <div className="relative">
+      <canvas
+        ref={canvasRef}
+        className="w-full h-64 rounded border border-zinc-800 bg-zinc-900"
+      />
+      <div
+        ref={tooltipRef}
+        className="pointer-events-none absolute hidden rounded bg-zinc-800 px-2 py-1 text-xs text-zinc-100"
+      />
+    </div>
+  );
 }
