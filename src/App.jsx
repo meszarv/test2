@@ -54,6 +54,7 @@ export default function App() {
     skipDirty,
     handleOpenExisting,
     handleCreateNew,
+    handleOpenSample,
     handleLoad,
     handleSave,
     handleCloseFile,
@@ -108,7 +109,7 @@ export default function App() {
         <div className="min-h-screen flex flex-col items-center justify-center p-6 gap-4">
           <button onClick={handleOpenExisting} className="h-12 px-6 rounded-lg bg-blue-600 hover:bg-blue-500">Open existing file</button>
           <button onClick={handleCreateNew} className="h-12 px-6 rounded-lg bg-blue-600 hover:bg-blue-500">Create new file</button>
-          <a href="/sample-portfolio.enc" download className="text-sm text-blue-400 underline">Download sample file</a>
+          <button onClick={handleOpenSample} className="text-sm text-blue-400 underline">Open sample portfolio</button>
         </div>
       )}
       {step === "password" && (
