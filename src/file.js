@@ -92,11 +92,12 @@ function equalBytes(a, b) {
 }
 
 export const DEFAULT_PORTFOLIO = {
-  version: 3,
+  version: 4,
   currency: "USD",
   assetTypes: defaultAssetTypes,
   liabilityTypes: defaultLiabilityTypes,
   allocation: {},
+  liabilities: [],
   snapshots: [],
 };
 
@@ -113,6 +114,9 @@ export function upgradePortfolio(data) {
       snapshots: (out.snapshots || []).map((s) => ({ ...s, liabilities: s.liabilities || [] })),
       version: 3,
     };
+  }
+  if (out.version === 3) {
+    out = { ...out, liabilities: out.liabilities || [], version: 4 };
   }
   return out;
 }
