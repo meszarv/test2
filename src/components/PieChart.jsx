@@ -34,9 +34,11 @@ export default function PieChart({ data, targetData, showTarget = false, assetTy
         ])
       );
       const source = showTarget ? targetData : data;
-      const entries = labels.map((l) => [l, source?.[l] || 0]);
-      const total = entries.reduce((a, [, v]) => a + (Number(v) || 0), 0) || 1;
+      const rawEntries = labels.map((l) => [l, source?.[l] || 0]);
+      const total = rawEntries.reduce((a, [, v]) => a + (Number(v) || 0), 0);
+      if (total <= 0) return;
       totalRef.current = total;
+      const entries = rawEntries.filter(([, v]) => (Number(v) || 0) > 0);
       let start = -Math.PI / 2;
       const radius = Math.min(width, height) / 2 - 8 * dpr;
       const cx = width / 2;
