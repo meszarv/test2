@@ -19,6 +19,7 @@ import pkg from "../package.json";
 export default function App() {
   const [assetTypes, setAssetTypes] = useState(defaultAssetTypes);
   const [assets, setAssets] = useState([]);
+  const [liabilities, setLiabilities] = useState([]);
   const [allocation, setAllocation] = useState({});
   const [period, setPeriod] = useState("monthly");
   const [chartMode, setChartMode] = useState("total");
@@ -38,7 +39,7 @@ export default function App() {
     handleAddSnapshot,
     handleChangeSnapshotDate,
     handleDeleteSnapshot,
-  } = useSnapshots({ assets, setAssets, assetTypes });
+  } = useSnapshots({ assets, setAssets, liabilities, setLiabilities, assetTypes });
 
   const {
     password,
@@ -73,15 +74,15 @@ export default function App() {
   });
 
   useEffect(() => {
-    snapshotFromAssets(assets);
+    snapshotFromAssets(assets, liabilities);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const totalNow = useMemo(() => netWorth(assets), [assets]);
+  const totalNow = useMemo(() => netWorth(assets, liabilities), [assets, liabilities]);
   const series = useMemo(() => buildSeries(snapshots, period), [snapshots, period]);
   const rebalancePlanData = useMemo(() => rebalance(assets, allocation), [assets, allocation]);
   const prevAssets = useMemo(() => (currentIndex > 0 ? snapshots[currentIndex - 1]?.assets || [] : []), [snapshots, currentIndex]);
-  const currentAllocation = useMemo(() => currentByCategory(assets), [assets]);
+  const currentAllocation = useMemo(() => currentByCategory(assets, liabilities), [assets, liabilities]);
 
   function handleAddAsset({ name, type, description, value }) {
     const asset = mkAsset(type, assetTypes, name);
