@@ -1,19 +1,23 @@
 import { useState } from "react";
 import { labelFor } from "../utils.js";
 
-export default function useSnapshots({ assets, setAssets, assetTypes }) {
+export default function useSnapshots({ assets, setAssets, liabilities, setLiabilities, assetTypes }) {
   const [snapshots, setSnapshots] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
 
-    function snapshotFromAssets(nextAssets, date = new Date()) {
-      setSnapshots((prev) => {
-        const iso = date.toISOString();
-        const month = iso.slice(0, 7);
-        const snap = { asOf: iso, assets: nextAssets.map((a) => ({ ...a })), liabilities: [] };
-        const existing = prev.findIndex((p) => p.asOf.slice(0, 7) === month);
-        let s;
-        if (existing >= 0) {
-          s = prev.map((p, i) => (i === existing ? snap : p));
+  function snapshotFromAssets(nextAssets = assets, nextLiabilities = liabilities, date = new Date()) {
+    setSnapshots((prev) => {
+      const iso = date.toISOString();
+      const month = iso.slice(0, 7);
+      const snap = {
+        asOf: iso,
+        assets: (nextAssets || []).map((a) => ({ ...a })),
+        liabilities: (nextLiabilities || []).map((l) => ({ ...l })),
+      };
+      const existing = prev.findIndex((p) => p.asOf.slice(0, 7) === month);
+      let s;
+      if (existing >= 0) {
+        s = prev.map((p, i) => (i === existing ? snap : p));
         setCurrentIndex(existing);
       } else {
         s = [...prev, snap].sort((a, b) => new Date(a.asOf) - new Date(b.asOf));
@@ -23,9 +27,20 @@ export default function useSnapshots({ assets, setAssets, assetTypes }) {
     });
   }
 
-  function setAssetsAndUpdateSnapshot(next) {
-    setAssets(next);
-    setSnapshots((prev) => prev.map((s, i) => (i === currentIndex ? { ...s, assets: next.map((a) => ({ ...a })) } : s)));
+  function setAssetsAndUpdateSnapshot(nextAssets, nextLiabilities = liabilities) {
+    setAssets(nextAssets);
+    setLiabilities(nextLiabilities);
+    setSnapshots((prev) =>
+      prev.map((s, i) =>
+        i === currentIndex
+          ? {
+              ...s,
+              assets: (nextAssets || []).map((a) => ({ ...a })),
+              liabilities: (nextLiabilities || []).map((l) => ({ ...l })),
+            }
+          : s
+      )
+    );
   }
 
   function handleSelectSnapshot(i) {
@@ -33,10 +48,11 @@ export default function useSnapshots({ assets, setAssets, assetTypes }) {
     if (!snap) return;
     setCurrentIndex(i);
     setAssets((snap.assets || []).map((a) => ({ ...a, name: a.name || labelFor(a.type, assetTypes) })));
+    setLiabilities((snap.liabilities || []).map((l) => ({ ...l })));
   }
 
   function handleAddSnapshot() {
-    snapshotFromAssets(assets);
+    snapshotFromAssets(assets, liabilities);
   }
 
   function handleChangeSnapshotDate(i, date) {
