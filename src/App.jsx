@@ -5,19 +5,29 @@ import LineChart from "./components/LineChart.jsx";
 import StackedAreaChart from "./components/StackedAreaChart.jsx";
 import PieChart from "./components/PieChart.jsx";
 import AssetTable from "./components/AssetTable.jsx";
+import LiabilityTable from "./components/LiabilityTable.jsx";
 import AddAssetModal from "./components/AddAssetModal.jsx";
+import AddLiabilityModal from "./components/AddLiabilityModal.jsx";
 import EditAssetModal from "./components/EditAssetModal.jsx";
 import SnapshotTabs from "./components/SnapshotTabs.jsx";
 import RebalancePlan from "./components/RebalancePlan.jsx";
 import ConfigPage from "./components/ConfigPage.jsx";
 import { mkAsset, formatCurrency } from "./utils.js";
-import { defaultAssetTypes, netWorth, rebalance, buildSeries, currentByCategory } from "./data.js";
+import {
+  defaultAssetTypes,
+  defaultLiabilityTypes,
+  netWorth,
+  rebalance,
+  buildSeries,
+  currentByCategory,
+} from "./data.js";
 import useSnapshots from "./hooks/useSnapshots.js";
 import usePortfolioFile from "./hooks/usePortfolioFile.js";
 import pkg from "../package.json";
 
 export default function App() {
   const [assetTypes, setAssetTypes] = useState(defaultAssetTypes);
+  const [liabilityTypes, setLiabilityTypes] = useState(defaultLiabilityTypes);
   const [assets, setAssets] = useState([]);
   const [liabilities, setLiabilities] = useState([]);
   const [allocation, setAllocation] = useState({});
@@ -25,6 +35,7 @@ export default function App() {
   const [chartMode, setChartMode] = useState("total");
   const [configOpen, setConfigOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const [addLiabilityOpen, setAddLiabilityOpen] = useState(false);
   const [editAsset, setEditAsset] = useState(null);
   const [showTarget, setShowTarget] = useState(false);
 
@@ -39,7 +50,7 @@ export default function App() {
     handleAddSnapshot,
     handleChangeSnapshotDate,
     handleDeleteSnapshot,
-  } = useSnapshots({ assets, setAssets, liabilities, setLiabilities, assetTypes });
+  } = useSnapshots({ assets, setAssets, liabilities, setLiabilities, assetTypes, liabilityTypes });
 
   const {
     password,
@@ -63,8 +74,12 @@ export default function App() {
   } = usePortfolioFile({
     assets,
     setAssets,
+    liabilities,
+    setLiabilities,
     assetTypes,
     setAssetTypes,
+    liabilityTypes,
+    setLiabilityTypes,
     allocation,
     setAllocation,
     snapshots,
@@ -82,6 +97,10 @@ export default function App() {
   const series = useMemo(() => buildSeries(snapshots, period), [snapshots, period]);
   const rebalancePlanData = useMemo(() => rebalance(assets, allocation), [assets, allocation]);
   const prevAssets = useMemo(() => (currentIndex > 0 ? snapshots[currentIndex - 1]?.assets || [] : []), [snapshots, currentIndex]);
+  const prevLiabilities = useMemo(
+    () => (currentIndex > 0 ? snapshots[currentIndex - 1]?.liabilities || [] : []),
+    [snapshots, currentIndex]
+  );
   const currentAllocation = useMemo(() => currentByCategory(assets, liabilities), [assets, liabilities]);
 
   function handleAddAsset({ name, type, description, value }) {
@@ -89,6 +108,13 @@ export default function App() {
     asset.description = description;
     asset.value = value;
     setAssetsAndUpdateSnapshot([...assets, asset]);
+  }
+
+  function handleAddLiability({ name, type, description, value }) {
+    const liability = mkAsset(type, liabilityTypes, name);
+    liability.description = description;
+    liability.value = value;
+    setAssetsAndUpdateSnapshot(assets, [...liabilities, liability]);
   }
 
   function handleEditAsset(updated) {
@@ -246,9 +272,36 @@ export default function App() {
               />
             </Section>
 
+            <Section
+              title="Liabilities"
+              right={
+                currentIndex === snapshots.length - 1 ? (
+                  <button
+                    onClick={() => setAddLiabilityOpen(true)}
+                    className="px-2 py-1 rounded bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 text-xs"
+                  >
+                    Add
+                  </button>
+                ) : null
+              }
+            >
+              <LiabilityTable
+                liabilities={liabilities}
+                prevLiabilities={prevLiabilities}
+                setLiabilities={(next) => setAssetsAndUpdateSnapshot(assets, next)}
+                liabilityTypes={liabilityTypes}
+              />
+            </Section>
+
         </div>
         <footer className="text-center text-xs text-zinc-500 mt-12">v{pkg.version}</footer>
         <AddAssetModal open={addOpen} onClose={() => setAddOpen(false)} assetTypes={assetTypes} onAdd={handleAddAsset} />
+        <AddLiabilityModal
+          open={addLiabilityOpen}
+          onClose={() => setAddLiabilityOpen(false)}
+          liabilityTypes={liabilityTypes}
+          onAdd={handleAddLiability}
+        />
         <EditAssetModal
           open={!!editAsset}
           asset={editAsset}
