@@ -48,8 +48,33 @@ export function normalizeAllocation(alloc) {
 }
 
 export function rebalance(assets, liabilities, allocPct) {
-  const totalNow = netWorth(assets, liabilities);
-  const byCat = currentByCategory(assets, liabilities);
+  const adjAssets = (assets || []).map((a) => ({ ...a }));
+  const adjLiabilities = (liabilities || []).map((l) => ({ ...l }));
+
+  let cashAvailable = adjAssets
+    .filter((a) => a.type === "cash")
+    .reduce((sum, a) => sum + (Number(a.value) || 0), 0);
+
+  for (const l of adjLiabilities) {
+    if (!l.priority) continue;
+    const payoff = Math.min(cashAvailable, Number(l.value) || 0);
+    l.value = (Number(l.value) || 0) - payoff;
+    cashAvailable -= payoff;
+  }
+
+  let toDeduct = adjAssets
+    .filter((a) => a.type === "cash")
+    .reduce((sum, a) => sum + (Number(a.value) || 0), 0) - cashAvailable;
+  for (const a of adjAssets) {
+    if (a.type !== "cash" || toDeduct <= 0) continue;
+    const avail = Number(a.value) || 0;
+    const used = Math.min(avail, toDeduct);
+    a.value = avail - used;
+    toDeduct -= used;
+  }
+
+  const totalNow = netWorth(adjAssets, adjLiabilities);
+  const byCat = currentByCategory(adjAssets, adjLiabilities);
   let norm = normalizeAllocation(allocPct);
   if (Object.keys(norm).length === 0) {
     const cats = Object.keys(byCat);

@@ -10,6 +10,10 @@ export default function LiabilityTable({ liabilities, prevLiabilities, setLiabil
     setLiabilities(liabilities.map((l) => (l.id === id ? { ...l, value: val } : l)));
   }
 
+  function updatePriority(id, priority) {
+    setLiabilities(liabilities.map((l) => (l.id === id ? { ...l, priority } : l)));
+  }
+
   const sortedLiabilities = [...liabilities];
   if (sort.key) {
     sortedLiabilities.sort((a, b) => {
@@ -41,7 +45,8 @@ export default function LiabilityTable({ liabilities, prevLiabilities, setLiabil
       <table className="w-full text-sm">
         <thead className="text-zinc-400">
           <tr>
-            <th className="text-left p-2 cursor-pointer" onClick={() => handleSort("name")}>
+            <th className="p-2">Priority</th>
+            <th className="text-left p-2 cursor-pointer" onClick={() => handleSort("name")}> 
               Name {sort.key === "name" ? (sort.asc ? "▲" : "▼") : ""}
             </th>
             <th className="text-left p-2 cursor-pointer" onClick={() => handleSort("type")}>
@@ -65,6 +70,14 @@ export default function LiabilityTable({ liabilities, prevLiabilities, setLiabil
                 className="border-t border-zinc-800"
                 onDoubleClick={() => !readOnly && onEdit && onEdit(l)}
               >
+                <td className="p-2 text-center">
+                  <input
+                    type="checkbox"
+                    checked={!!l.priority}
+                    onChange={(e) => updatePriority(l.id, e.target.checked)}
+                    disabled={readOnly}
+                  />
+                </td>
                 <td className="p-2">{l.name}</td>
                 <td className="p-2">{liabilityTypes[l.type]?.name || l.type}</td>
                 <td className="p-2 text-xs whitespace-pre-line">{l.description}</td>
