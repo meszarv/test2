@@ -37,7 +37,7 @@ test('upgradePortfolio preserves existing liabilities from v3', () => {
   };
   const upgraded = upgradePortfolio(old);
   assert.equal(upgraded.version, DEFAULT_PORTFOLIO.version);
-  assert.deepEqual(upgraded.liabilities, old.liabilities);
+  assert.deepEqual(upgraded.liabilities, old.liabilities.map((l) => ({ ...l, priority: false })));
 });
 
 function memoryHandle() {
@@ -66,9 +66,9 @@ test('writePortfolioFile/readPortfolioFile round-trips liabilities', async () =>
   const handle = memoryHandle();
   const data = {
     ...DEFAULT_PORTFOLIO,
-    liabilities: [{ id: 'l1', name: 'Loan', type: 'loan', value: 500 }],
+    liabilities: [{ id: 'l1', name: 'Loan', type: 'loan', value: 500, priority: true }],
     snapshots: [
-      { asOf: '2024-01-01', assets: [], liabilities: [{ id: 'l1', type: 'loan', value: 500 }] },
+      { asOf: '2024-01-01', assets: [], liabilities: [{ id: 'l1', type: 'loan', value: 500, priority: true }] },
     ],
   };
   const password = 'pw';
@@ -83,4 +83,20 @@ test('upgradePortfolio adds top-level liabilities and bumps version from v3', ()
   const upgraded = upgradePortfolio(old);
   assert.equal(upgraded.version, DEFAULT_PORTFOLIO.version);
   assert.deepEqual(upgraded.liabilities, []);
+});
+
+test('upgradePortfolio adds priority to liabilities from v4', () => {
+  const old = {
+    version: 4,
+    currency: 'USD',
+    assetTypes: {},
+    liabilityTypes: {},
+    allocation: {},
+    liabilities: [{ id: 'l1', name: 'Loan', type: 'loan', value: 100 }],
+    snapshots: [{ asOf: '2024-01-01', assets: [], liabilities: [{ id: 'l1', type: 'loan', value: 100 }] }],
+  };
+  const upgraded = upgradePortfolio(old);
+  assert.equal(upgraded.version, DEFAULT_PORTFOLIO.version);
+  assert.equal(upgraded.liabilities[0].priority, false);
+  assert.equal(upgraded.snapshots[0].liabilities[0].priority, false);
 });

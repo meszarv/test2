@@ -48,7 +48,13 @@ export default function useSnapshots({ assets, setAssets, liabilities, setLiabil
     if (!snap) return;
     setCurrentIndex(i);
     setAssets((snap.assets || []).map((a) => ({ ...a, name: a.name || labelFor(a.type, assetTypes) })));
-    setLiabilities((snap.liabilities || []).map((l) => ({ ...l, name: l.name || labelFor(l.type, liabilityTypes) })));
+    setLiabilities(
+      (snap.liabilities || []).map((l) => ({
+        ...l,
+        name: l.name || labelFor(l.type, liabilityTypes),
+        priority: !!l.priority,
+      }))
+    );
   }
 
   function handleAddSnapshot() {

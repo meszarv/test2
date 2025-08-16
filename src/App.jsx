@@ -117,6 +117,7 @@ export default function App() {
     const liability = mkAsset(type, liabilityTypes, name);
     liability.description = description;
     liability.value = value;
+    liability.priority = false;
     setAssetsAndUpdateSnapshot(assets, [...liabilities, liability]);
   }
 

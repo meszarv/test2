@@ -139,7 +139,14 @@ export default function usePortfolioFile({
       const lt = data.liabilityTypes || defaultLiabilityTypes;
       if (latest) {
         setAssets((latest.assets || []).map((a) => ({ ...a, id: mkId(), name: a.name || labelFor(a.type, at) })));
-        setLiabilities((latest.liabilities || []).map((l) => ({ ...l, id: mkId(), name: l.name || labelFor(l.type, lt) })));
+        setLiabilities(
+          (latest.liabilities || []).map((l) => ({
+            ...l,
+            id: mkId(),
+            name: l.name || labelFor(l.type, lt),
+            priority: !!l.priority,
+          }))
+        );
         setCurrentIndex(snaps.length - 1);
       } else {
         snapshotFromAssets(assets, liabilities);

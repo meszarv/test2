@@ -25,7 +25,7 @@ function render(component, props) {
 test('LiabilityTable lists liabilities and types', () => {
   const LiabilityTable = require('./LiabilityTable.jsx').default;
   const liabilities = [
-    { id: '1', name: 'Loan A', type: 'loan', description: 'desc', value: 100 },
+    { id: '1', name: 'Loan A', type: 'loan', description: 'desc', value: 100, priority: true },
   ];
   const markup = render(LiabilityTable, {
     liabilities,
@@ -36,4 +36,6 @@ test('LiabilityTable lists liabilities and types', () => {
   });
   assert.match(markup, /Loan A/);
   assert.match(markup, /Loan/);
+  assert.match(markup, /type="checkbox"/);
+  assert.match(markup, /checked/);
 });
