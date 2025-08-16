@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { labelFor } from "../utils.js";
 
-export default function useSnapshots({ assets, setAssets, liabilities, setLiabilities, assetTypes }) {
+export default function useSnapshots({ assets, setAssets, liabilities, setLiabilities, assetTypes, liabilityTypes }) {
   const [snapshots, setSnapshots] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
 
@@ -48,7 +48,7 @@ export default function useSnapshots({ assets, setAssets, liabilities, setLiabil
     if (!snap) return;
     setCurrentIndex(i);
     setAssets((snap.assets || []).map((a) => ({ ...a, name: a.name || labelFor(a.type, assetTypes) })));
-    setLiabilities((snap.liabilities || []).map((l) => ({ ...l })));
+    setLiabilities((snap.liabilities || []).map((l) => ({ ...l, name: l.name || labelFor(l.type, liabilityTypes) })));
   }
 
   function handleAddSnapshot() {

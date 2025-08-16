@@ -8,14 +8,18 @@ import {
   clearSavedFile,
   DEFAULT_PORTFOLIO,
 } from "../file.js";
-import { defaultAssetTypes } from "../data.js";
+import { defaultAssetTypes, defaultLiabilityTypes } from "../data.js";
 import { mkId, labelFor, mkAsset } from "../utils.js";
 
 export default function usePortfolioFile({
   assets,
   setAssets,
+  liabilities,
+  setLiabilities,
   assetTypes,
   setAssetTypes,
+  liabilityTypes,
+  setLiabilityTypes,
   allocation,
   setAllocation,
   snapshots,
@@ -56,7 +60,7 @@ export default function usePortfolioFile({
       return;
     }
     setDirty(true);
-  }, [assetTypes, allocation, snapshots]);
+  }, [assetTypes, liabilityTypes, allocation, snapshots]);
 
   async function handleOpenExisting() {
     try {
@@ -101,9 +105,11 @@ export default function usePortfolioFile({
         sampleSnapshots.push({ asOf: d.toISOString(), assets: snapAssets, liabilities: [] });
       }
       setAssetTypes(defaultAssetTypes);
+      setLiabilityTypes(defaultLiabilityTypes);
       setAllocation({});
       setSnapshots(sampleSnapshots);
       setAssets(sampleSnapshots[sampleSnapshots.length - 1].assets);
+      setLiabilities([]);
       setCurrentIndex(sampleSnapshots.length - 1);
       setStep("main");
       setDirty(false);
@@ -129,14 +135,18 @@ export default function usePortfolioFile({
       const snaps = (data.snapshots || []).slice().sort((a, b) => new Date(a.asOf) - new Date(b.asOf));
       setSnapshots(snaps);
       const latest = snaps[snaps.length - 1];
+      const at = data.assetTypes || defaultAssetTypes;
+      const lt = data.liabilityTypes || defaultLiabilityTypes;
       if (latest) {
-        setAssets((latest.assets || []).map((a) => ({ ...a, id: mkId(), name: a.name || labelFor(a.type, assetTypes) })));
+        setAssets((latest.assets || []).map((a) => ({ ...a, id: mkId(), name: a.name || labelFor(a.type, at) })));
+        setLiabilities((latest.liabilities || []).map((l) => ({ ...l, id: mkId(), name: l.name || labelFor(l.type, lt) })));
         setCurrentIndex(snaps.length - 1);
       } else {
-        snapshotFromAssets(assets);
+        snapshotFromAssets(assets, liabilities);
       }
       setAllocation(data.allocation || {});
-      setAssetTypes(data.assetTypes || defaultAssetTypes);
+      setAssetTypes(at);
+      setLiabilityTypes(lt);
       setStep("main");
       setDirty(false);
       skipDirty.current = true;
@@ -159,7 +169,7 @@ export default function usePortfolioFile({
     setLoading(true);
     setError(null);
       try {
-        const data = { ...DEFAULT_PORTFOLIO, assetTypes, allocation, snapshots };
+        const data = { ...DEFAULT_PORTFOLIO, assetTypes, liabilityTypes, allocation, snapshots, liabilities };
         await writePortfolioFile(fileHandle, password, data);
       setDirty(false);
       skipDirty.current = true;
@@ -175,7 +185,7 @@ export default function usePortfolioFile({
     setLoading(true);
     setError(null);
       try {
-        const data = { ...DEFAULT_PORTFOLIO, assetTypes, allocation, snapshots };
+        const data = { ...DEFAULT_PORTFOLIO, assetTypes, liabilityTypes, allocation, snapshots, liabilities };
         await writePortfolioFile(fileHandle, password, data);
       setDirty(false);
       skipDirty.current = true;
@@ -185,8 +195,11 @@ export default function usePortfolioFile({
       setSnapshots([]);
       setCurrentIndex(0);
       setAssets([]);
-      snapshotFromAssets([]);
+      setLiabilities([]);
+      snapshotFromAssets([], []);
       setAllocation({});
+      setAssetTypes(defaultAssetTypes);
+      setLiabilityTypes(defaultLiabilityTypes);
       setStep("pick");
     } catch (e) {
       setError(e && e.message ? e.message : String(e));
