@@ -1,4 +1,4 @@
-import { defaultAssetTypes } from "./data.js";
+import { defaultAssetTypes, defaultLiabilityTypes } from "./data.js";
 
 const DB_NAME = "portfolio-tracker-db";
 const STORE = "handles";
@@ -91,13 +91,28 @@ function equalBytes(a, b) {
   return true;
 }
 
-export const DEFAULT_PORTFOLIO = { version: 2, currency: "USD", assetTypes: defaultAssetTypes, allocation: {}, snapshots: [] };
+export const DEFAULT_PORTFOLIO = {
+  version: 3,
+  currency: "USD",
+  assetTypes: defaultAssetTypes,
+  liabilityTypes: defaultLiabilityTypes,
+  allocation: {},
+  snapshots: [],
+};
 
 export function upgradePortfolio(data) {
   if (!data || typeof data !== "object") return DEFAULT_PORTFOLIO;
   let out = { ...data };
   if (out.version === 1) {
     out = { currency: "USD", ...out, version: 2 };
+  }
+  if (out.version === 2) {
+    out = {
+      ...out,
+      liabilityTypes: defaultLiabilityTypes,
+      snapshots: (out.snapshots || []).map((s) => ({ ...s, liabilities: s.liabilities || [] })),
+      version: 3,
+    };
   }
   return out;
 }

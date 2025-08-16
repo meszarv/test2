@@ -5,15 +5,15 @@ export default function useSnapshots({ assets, setAssets, assetTypes }) {
   const [snapshots, setSnapshots] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
 
-  function snapshotFromAssets(nextAssets, date = new Date()) {
-    setSnapshots((prev) => {
-      const iso = date.toISOString();
-      const month = iso.slice(0, 7);
-      const snap = { asOf: iso, assets: nextAssets.map((a) => ({ ...a })) };
-      const existing = prev.findIndex((p) => p.asOf.slice(0, 7) === month);
-      let s;
-      if (existing >= 0) {
-        s = prev.map((p, i) => (i === existing ? snap : p));
+    function snapshotFromAssets(nextAssets, date = new Date()) {
+      setSnapshots((prev) => {
+        const iso = date.toISOString();
+        const month = iso.slice(0, 7);
+        const snap = { asOf: iso, assets: nextAssets.map((a) => ({ ...a })), liabilities: [] };
+        const existing = prev.findIndex((p) => p.asOf.slice(0, 7) === month);
+        let s;
+        if (existing >= 0) {
+          s = prev.map((p, i) => (i === existing ? snap : p));
         setCurrentIndex(existing);
       } else {
         s = [...prev, snap].sort((a, b) => new Date(a.asOf) - new Date(b.asOf));

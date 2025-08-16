@@ -6,6 +6,7 @@ import {
   readPortfolioFile,
   writePortfolioFile,
   clearSavedFile,
+  DEFAULT_PORTFOLIO,
 } from "../file.js";
 import { defaultAssetTypes } from "../data.js";
 import { mkId, labelFor, mkAsset } from "../utils.js";
@@ -97,7 +98,7 @@ export default function usePortfolioFile({
           ...a,
           value: Math.round(a.value * (0.8 + Math.random() * 0.4)),
         }));
-        sampleSnapshots.push({ asOf: d.toISOString(), assets: snapAssets });
+        sampleSnapshots.push({ asOf: d.toISOString(), assets: snapAssets, liabilities: [] });
       }
       setAssetTypes(defaultAssetTypes);
       setAllocation({});
@@ -157,9 +158,9 @@ export default function usePortfolioFile({
     if (!fileHandle || !password) return setError("Pick a file and enter password first.");
     setLoading(true);
     setError(null);
-    try {
-      const data = { version: 1, assetTypes, allocation, snapshots };
-      await writePortfolioFile(fileHandle, password, data);
+      try {
+        const data = { ...DEFAULT_PORTFOLIO, assetTypes, allocation, snapshots };
+        await writePortfolioFile(fileHandle, password, data);
       setDirty(false);
       skipDirty.current = true;
     } catch (e) {
@@ -173,9 +174,9 @@ export default function usePortfolioFile({
     if (!fileHandle) return;
     setLoading(true);
     setError(null);
-    try {
-      const data = { version: 1, assetTypes, allocation, snapshots };
-      await writePortfolioFile(fileHandle, password, data);
+      try {
+        const data = { ...DEFAULT_PORTFOLIO, assetTypes, allocation, snapshots };
+        await writePortfolioFile(fileHandle, password, data);
       setDirty(false);
       skipDirty.current = true;
       await clearSavedFile();
