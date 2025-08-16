@@ -15,4 +15,12 @@ test('upgradePortfolio adds liabilities and bumps version from v2', () => {
   assert.equal(upgraded.version, DEFAULT_PORTFOLIO.version);
   assert.deepEqual(upgraded.liabilityTypes, DEFAULT_PORTFOLIO.liabilityTypes);
   assert.deepEqual(upgraded.snapshots[0].liabilities, []);
+  assert.deepEqual(upgraded.liabilities, []);
+});
+
+test('upgradePortfolio adds top-level liabilities and bumps version from v3', () => {
+  const old = { version: 3, currency: 'USD', assetTypes: {}, liabilityTypes: {}, allocation: {}, snapshots: [] };
+  const upgraded = upgradePortfolio(old);
+  assert.equal(upgraded.version, DEFAULT_PORTFOLIO.version);
+  assert.deepEqual(upgraded.liabilities, []);
 });
