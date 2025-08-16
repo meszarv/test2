@@ -7,15 +7,27 @@ export const defaultAssetTypes = {
   commodity: { name: "Commodity" },
 };
 
-export function netWorth(assets) {
-  return (assets || []).reduce((acc, a) => acc + (Number(a.value) || 0), 0);
+export const defaultLiabilityTypes = {
+  credit_card: { name: "Credit card" },
+  loan: { name: "Loan" },
+  mortgage: { name: "Mortgage" },
+};
+
+export function netWorth(assets, liabilities) {
+  const assetTotal = (assets || []).reduce((acc, a) => acc + (Number(a.value) || 0), 0);
+  const liabilityTotal = (liabilities || []).reduce((acc, l) => acc + (Number(l.value) || 0), 0);
+  return assetTotal - liabilityTotal;
 }
 
-export function currentByCategory(assets) {
+export function currentByCategory(assets, liabilities) {
   const map = {};
   for (const a of assets || []) {
     const key = a.type;
     map[key] = (map[key] || 0) + (Number(a.value) || 0);
+  }
+  for (const l of liabilities || []) {
+    const key = l.type;
+    map[key] = (map[key] || 0) - (Number(l.value) || 0);
   }
   return map;
 }
@@ -78,10 +90,10 @@ export function groupByPeriod(points, mode) {
 
 export function buildSeries(snaps, period) {
   const pts = (snaps || []).map((s) => {
-    const byCat = currentByCategory(s.assets || []);
+    const byCat = currentByCategory(s.assets || [], s.liabilities || []);
     return {
       date: new Date(s.asOf),
-      value: netWorth(s.assets || []),
+      value: netWorth(s.assets || [], s.liabilities || []),
       ...byCat,
     };
     });

@@ -8,3 +8,11 @@ test('upgradePortfolio adds currency and bumps version', () => {
   assert.equal(upgraded.version, DEFAULT_PORTFOLIO.version);
   assert.equal(upgraded.currency, DEFAULT_PORTFOLIO.currency);
 });
+
+test('upgradePortfolio adds liabilities and bumps version from v2', () => {
+  const old = { version: 2, currency: 'USD', assetTypes: {}, allocation: {}, snapshots: [{ asOf: '2024-01-01', assets: [] }] };
+  const upgraded = upgradePortfolio(old);
+  assert.equal(upgraded.version, DEFAULT_PORTFOLIO.version);
+  assert.deepEqual(upgraded.liabilityTypes, DEFAULT_PORTFOLIO.liabilityTypes);
+  assert.deepEqual(upgraded.snapshots[0].liabilities, []);
+});
