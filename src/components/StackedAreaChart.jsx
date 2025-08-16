@@ -34,8 +34,14 @@ export default function StackedAreaChart({ data, assetTypes }) {
         return;
       }
 
-      const categories = Object.keys(data[0]).filter(
-        (k) => k !== "label" && k !== "value"
+      const categories = Array.from(
+        new Set(
+          data.flatMap((d) =>
+            Object.keys(d).filter(
+              (k) => k !== "label" && k !== "value" && (Number(d[k]) || 0) > 0
+            )
+          )
+        )
       );
       const xs = data.map((_, i) => i);
       const totals = data.map((d) => d.value || 0);
@@ -89,7 +95,7 @@ export default function StackedAreaChart({ data, assetTypes }) {
 
       const accum = new Array(xs.length).fill(0);
       categories.forEach((cat, ci) => {
-        const vals = data.map((d) => Number(d[cat]) || 0);
+        const vals = data.map((d) => Math.max(0, Number(d[cat]) || 0));
         const base = accum.slice();
         ctx.beginPath();
         ctx.moveTo(xToPx(xs[0]), yToPx(base[0] + vals[0]));
@@ -117,9 +123,15 @@ export default function StackedAreaChart({ data, assetTypes }) {
 
   const categories = useMemo(
     () =>
-      data.length
-        ? Object.keys(data[0]).filter((k) => k !== "label" && k !== "value")
-        : [],
+      Array.from(
+        new Set(
+          data.flatMap((d) =>
+            Object.keys(d).filter(
+              (k) => k !== "label" && k !== "value" && (Number(d[k]) || 0) > 0
+            )
+          )
+        )
+      ),
     [data]
   );
 

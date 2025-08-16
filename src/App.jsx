@@ -95,7 +95,10 @@ export default function App() {
 
   const totalNow = useMemo(() => netWorth(assets, liabilities), [assets, liabilities]);
   const series = useMemo(() => buildSeries(snapshots, period), [snapshots, period]);
-  const rebalancePlanData = useMemo(() => rebalance(assets, allocation), [assets, allocation]);
+  const rebalancePlanData = useMemo(
+    () => rebalance(assets, liabilities, allocation),
+    [assets, liabilities, allocation]
+  );
   const prevAssets = useMemo(() => (currentIndex > 0 ? snapshots[currentIndex - 1]?.assets || [] : []), [snapshots, currentIndex]);
   const prevLiabilities = useMemo(
     () => (currentIndex > 0 ? snapshots[currentIndex - 1]?.liabilities || [] : []),

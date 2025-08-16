@@ -46,9 +46,9 @@ export default function LineChart({
       }
 
       const xs = data.map((_, i) => i);
-      const ys = data.map((d) => d.value);
-      const minY = Math.min(...ys);
-      const maxY = Math.max(...ys);
+      const ys = data.map((d) => d.value || 0);
+      const minY = Math.min(0, ...ys);
+      const maxY = Math.max(0, ...ys);
       const xToPx = (x) =>
         padding + (x / Math.max(1, xs.length - 1)) * (width - 2 * padding);
       const yToPx = (y) =>

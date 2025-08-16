@@ -19,15 +19,23 @@ export function netWorth(assets, liabilities) {
   return assetTotal - liabilityTotal;
 }
 
+// Returns net amounts by asset category with liabilities spread proportionally.
 export function currentByCategory(assets, liabilities) {
-  const map = {};
+  const assetMap = {};
   for (const a of assets || []) {
     const key = a.type;
-    map[key] = (map[key] || 0) + (Number(a.value) || 0);
+    assetMap[key] = (assetMap[key] || 0) + (Number(a.value) || 0);
   }
-  for (const l of liabilities || []) {
-    const key = l.type;
-    map[key] = (map[key] || 0) - (Number(l.value) || 0);
+  const assetTotal = Object.values(assetMap).reduce((a, b) => a + b, 0);
+  const liabilityTotal = (liabilities || []).reduce(
+    (a, l) => a + (Number(l.value) || 0),
+    0
+  );
+  if (assetTotal === 0) return {};
+  const ratio = liabilityTotal / assetTotal;
+  const map = {};
+  for (const [k, v] of Object.entries(assetMap)) {
+    map[k] = v - v * ratio;
   }
   return map;
 }
@@ -39,9 +47,9 @@ export function normalizeAllocation(alloc) {
   return out; // fractions summing to ~1
 }
 
-export function rebalance(assets, allocPct) {
-  const totalNow = netWorth(assets);
-  const byCat = currentByCategory(assets);
+export function rebalance(assets, liabilities, allocPct) {
+  const totalNow = netWorth(assets, liabilities);
+  const byCat = currentByCategory(assets, liabilities);
   let norm = normalizeAllocation(allocPct);
   if (Object.keys(norm).length === 0) {
     const cats = Object.keys(byCat);
