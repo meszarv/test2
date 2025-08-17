@@ -30,6 +30,20 @@ export default function RebalancePlan({ data, assetTypes }) {
               : 0
             : data.byCat[b] || 0;
         break;
+      case "after":
+        av =
+          a === "priority_debt"
+            ? data.priorityDebt
+              ? -data.priorityDebt
+              : 0
+            : (data.byCat[a] || 0) + (data.investPlan[a] || 0);
+        bv =
+          b === "priority_debt"
+            ? data.priorityDebt
+              ? -data.priorityDebt
+              : 0
+            : (data.byCat[b] || 0) + (data.investPlan[b] || 0);
+        break;
       case "ideal":
         av = a === "priority_debt" ? 0 : data.idealByCat[a] || 0;
         bv = b === "priority_debt" ? 0 : data.idealByCat[b] || 0;
@@ -83,6 +97,9 @@ export default function RebalancePlan({ data, assetTypes }) {
             <th className="text-right py-1 cursor-pointer" onClick={() => handleSort("invest")}>
               Invest now {sort.key === "invest" ? (sort.asc ? "▲" : "▼") : ""}
             </th>
+            <th className="text-right py-1 cursor-pointer" onClick={() => handleSort("after")}>
+              After {sort.key === "after" ? (sort.asc ? "▲" : "▼") : ""}
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -114,6 +131,17 @@ export default function RebalancePlan({ data, assetTypes }) {
                     c === "priority_debt"
                       ? data.priorityPayoff || 0
                       : data.investPlan[c] || 0
+                  )
+                }
+              </td>
+              <td className="py-1 text-right text-zinc-300">
+                {
+                  formatCurrency(
+                    c === "priority_debt"
+                      ? data.priorityDebt
+                        ? -data.priorityDebt
+                        : 0
+                      : (data.byCat[c] || 0) + (data.investPlan[c] || 0)
                   )
                 }
               </td>
