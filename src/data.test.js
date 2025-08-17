@@ -10,10 +10,11 @@ test('rebalance invests remaining cash after paying priority liabilities', () =>
   const liabilities = [
     { type: 'loan', value: 80, priority: true },
   ];
-  const { investPlan, priorityDebt } = rebalance(assets, liabilities, { stock: 1 });
+  const { investPlan, priorityDebt, priorityPayoff } = rebalance(assets, liabilities, { stock: 1 });
   assert.equal(Math.round(investPlan.stock), 20);
   assert.equal(Math.round(investPlan.cash), -20);
   assert.equal(priorityDebt, 0);
+  assert.equal(priorityPayoff, 80);
 });
 
 test('rebalance returns remaining priority debt', () => {
@@ -23,8 +24,9 @@ test('rebalance returns remaining priority debt', () => {
   const liabilities = [
     { type: 'loan', value: 80, priority: true },
   ];
-  const { priorityDebt, byCat, totalNow } = rebalance(assets, liabilities, {});
+  const { priorityDebt, priorityPayoff, byCat, totalNow } = rebalance(assets, liabilities, {});
   assert.equal(priorityDebt, 30);
+  assert.equal(priorityPayoff, 50);
   const sumByCat = Object.values(byCat).reduce((a, b) => a + b, 0);
   assert.equal(Math.round(sumByCat - priorityDebt), Math.round(totalNow));
 });

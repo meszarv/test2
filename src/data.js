@@ -54,6 +54,7 @@ export function rebalance(assets, liabilities, allocPct) {
   let cashAvailable = adjAssets
     .filter((a) => a.type === "cash")
     .reduce((sum, a) => sum + (Number(a.value) || 0), 0);
+  const initialCash = cashAvailable;
 
   for (const l of adjLiabilities) {
     if (!l.priority) continue;
@@ -62,9 +63,8 @@ export function rebalance(assets, liabilities, allocPct) {
     cashAvailable -= payoff;
   }
 
-  let toDeduct = adjAssets
-    .filter((a) => a.type === "cash")
-    .reduce((sum, a) => sum + (Number(a.value) || 0), 0) - cashAvailable;
+  const priorityPayoff = initialCash - cashAvailable;
+  let toDeduct = priorityPayoff;
   for (const a of adjAssets) {
     if (a.type !== "cash" || toDeduct <= 0) continue;
     const avail = Number(a.value) || 0;
@@ -111,7 +111,15 @@ export function rebalance(assets, liabilities, allocPct) {
       investPlan[c] = (gaps[c] / sumGaps) * cashSurplus;
     }
   }
-  return { totalNow, targetTotal: totalNow, byCat, idealByCat, investPlan, priorityDebt };
+  return {
+    totalNow,
+    targetTotal: totalNow,
+    byCat,
+    idealByCat,
+    investPlan,
+    priorityDebt,
+    priorityPayoff,
+  };
 }
 
 export function groupByPeriod(points, mode) {
