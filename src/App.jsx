@@ -13,6 +13,7 @@ import EditLiabilityModal from "./components/EditLiabilityModal.jsx";
 import SnapshotTabs from "./components/SnapshotTabs.jsx";
 import RebalancePlan from "./components/RebalancePlan.jsx";
 import ConfigPage from "./components/ConfigPage.jsx";
+import AddBtn from "./components/AddBtn.jsx";
 import { mkAsset, formatCurrency } from "./utils.js";
 import {
   defaultAssetTypes,
@@ -274,7 +275,14 @@ export default function App() {
                 </Section>
               </div>
 
-            <Section title="Assets">
+            <Section
+              title="Assets"
+              right={
+                currentIndex === snapshots.length - 1 ? (
+                  <AddBtn onClick={() => setAddOpen(true)} title="Add asset" />
+                ) : null
+              }
+            >
               <SnapshotTabs
                 snapshots={snapshots}
                 currentIndex={currentIndex}
@@ -296,12 +304,7 @@ export default function App() {
               title="Liabilities"
               right={
                 currentIndex === snapshots.length - 1 ? (
-                  <button
-                    onClick={() => setAddLiabilityOpen(true)}
-                    className="px-2 py-1 rounded bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 text-xs"
-                  >
-                    Add
-                  </button>
+                  <AddBtn onClick={() => setAddLiabilityOpen(true)} title="Add liability" />
                 ) : null
               }
             >
@@ -339,14 +342,6 @@ export default function App() {
           onSave={handleEditLiability}
           onDelete={handleDeleteLiability}
         />
-        {currentIndex === snapshots.length - 1 && (
-          <button
-            onClick={() => setAddOpen(true)}
-            className="fixed bottom-6 right-6 z-50 h-12 w-12 rounded-full bg-blue-600 hover:bg-blue-500 text-white text-3xl leading-none shadow-lg"
-          >
-            +
-          </button>
-        )}
         </>
       )}
 
