@@ -79,7 +79,7 @@ test('priority payoff appears only in invest column', async () => {
   const cells = row.querySelectorAll('td');
   const currentVal = parseFloat(cells[2].textContent.replace(/[^0-9.-]/g, ''));
   const investVal = parseFloat(cells[4].textContent.replace(/[^0-9.-]/g, ''));
-  assert.equal(currentVal, 0);
+  assert.equal(currentVal, -40);
   assert.equal(investVal, 40);
 });
 

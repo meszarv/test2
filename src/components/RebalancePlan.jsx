@@ -3,6 +3,8 @@ import { formatCurrency, labelFor, pieColors } from "../utils.js";
 
 export default function RebalancePlan({ data, assetTypes }) {
   const [sort, setSort] = useState({ key: "category", asc: true });
+  const totalPriorityDebt =
+    (data.priorityDebt || 0) + (data.priorityPayoff || 0);
   const cats = Array.from(
     new Set([
       ...Object.keys(data.byCat || {}),
@@ -17,18 +19,8 @@ export default function RebalancePlan({ data, assetTypes }) {
     let bv;
     switch (sort.key) {
       case "current":
-        av =
-          a === "priority_debt"
-            ? data.priorityDebt
-              ? -data.priorityDebt
-              : 0
-            : data.byCat[a] || 0;
-        bv =
-          b === "priority_debt"
-            ? data.priorityDebt
-              ? -data.priorityDebt
-              : 0
-            : data.byCat[b] || 0;
+        av = a === "priority_debt" ? -totalPriorityDebt : data.byCat[a] || 0;
+        bv = b === "priority_debt" ? -totalPriorityDebt : data.byCat[b] || 0;
         break;
       case "after":
         av =
@@ -115,9 +107,7 @@ export default function RebalancePlan({ data, assetTypes }) {
                 {
                   formatCurrency(
                     c === "priority_debt"
-                      ? data.priorityDebt
-                        ? -data.priorityDebt
-                        : 0
+                      ? -totalPriorityDebt
                       : data.byCat[c] || 0
                   )
                 }
