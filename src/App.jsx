@@ -203,7 +203,7 @@ export default function App() {
           {error && <div className="p-3 rounded-xl bg-red-900/30 border border-red-800 text-red-200">{error}</div>}
           {loading && <div className="p-3 rounded-xl bg-zinc-800 text-zinc-300">Working…</div>}
 
-            <div className="grid md:grid-cols-3 gap-6">
+            <div className="grid md:grid-cols-2 gap-6">
               <Section
                 title="Net worth (current)"
                 right={
@@ -227,17 +227,11 @@ export default function App() {
                   assetTypes={assetTypes}
                 />
               </Section>
-
-              <Section title="Rebalance">
-                <div className="text-sm text-zinc-400 mb-2">Cash above target allocation is distributed to under-allocated categories.</div>
-                <RebalancePlan data={rebalancePlanData} assetTypes={assetTypes} />
-              </Section>
-
-                <Section
-                  title="History view"
-                  right={
-                    <div className="flex items-center gap-2">
-                      <select
+              <Section
+                title="History view"
+                right={
+                  <div className="flex items-center gap-2">
+                    <select
                         value={period}
                         onChange={(e) => setPeriod(e.target.value)}
                         className="bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1 text-sm"
@@ -274,6 +268,13 @@ export default function App() {
                   )}
                 </Section>
               </div>
+
+            <Section title="Rebalance">
+              <div className="text-sm text-zinc-400 mb-2">
+                Cash above target allocation is distributed to under-allocated categories.
+              </div>
+              <RebalancePlan data={rebalancePlanData} assetTypes={assetTypes} />
+            </Section>
 
             <Section
               title="Assets"
