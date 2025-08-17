@@ -47,8 +47,12 @@ export default function LineChart({
 
       const xs = data.map((_, i) => i);
       const ys = data.map((d) => d.value || 0);
-      const minY = Math.min(0, ...ys);
-      const maxY = Math.max(0, ...ys);
+      const minVal = Math.min(...ys);
+      const maxVal = Math.max(...ys);
+      const minIdx = ys.indexOf(minVal);
+      const maxIdx = ys.indexOf(maxVal);
+      const minY = Math.min(minVal, 0);
+      const maxY = Math.max(maxVal, 0);
       const xToPx = (x) =>
         padding + (x / Math.max(1, xs.length - 1)) * (width - 2 * padding);
       const yToPx = (y) =>
@@ -144,22 +148,24 @@ export default function LineChart({
 
       // markers for high/low
       if (showMarkers) {
-        const maxIdx = ys.indexOf(maxY);
-        const minIdx = ys.indexOf(minY);
         ctx.font = `${10 * dpr}px ui-sans-serif`;
-        const high = points[maxIdx];
-        ctx.fillStyle = "#16a34a";
-        ctx.beginPath();
-        ctx.arc(high.x, high.y, 3 * dpr, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillText("High", high.x + 4 * dpr, high.y - 6 * dpr);
+        if (maxIdx !== -1 && points[maxIdx]) {
+          const high = points[maxIdx];
+          ctx.fillStyle = "#16a34a";
+          ctx.beginPath();
+          ctx.arc(high.x, high.y, 3 * dpr, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillText("High", high.x + 4 * dpr, high.y - 6 * dpr);
+        }
 
-        const low = points[minIdx];
-        ctx.fillStyle = "#dc2626";
-        ctx.beginPath();
-        ctx.arc(low.x, low.y, 3 * dpr, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillText("Low", low.x + 4 * dpr, low.y + 12 * dpr);
+        if (minIdx !== -1 && points[minIdx]) {
+          const low = points[minIdx];
+          ctx.fillStyle = "#dc2626";
+          ctx.beginPath();
+          ctx.arc(low.x, low.y, 3 * dpr, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillText("Low", low.x + 4 * dpr, low.y + 12 * dpr);
+        }
       }
 
       const last = data[data.length - 1];
