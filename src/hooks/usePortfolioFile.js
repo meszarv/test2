@@ -171,15 +171,15 @@ export default function usePortfolioFile({
     }
   }
 
-  async function handleSave() {
-    if (!fileHandle || !password) return setError("Pick a file and enter password first.");
+  function buildPortfolioData() {
+    return { ...DEFAULT_PORTFOLIO, assetTypes, liabilityTypes, allocation, snapshots, liabilities };
+  }
+
+  async function withLoading(fn) {
     setLoading(true);
     setError(null);
-      try {
-        const data = { ...DEFAULT_PORTFOLIO, assetTypes, liabilityTypes, allocation, snapshots, liabilities };
-        await writePortfolioFile(fileHandle, password, data);
-      setDirty(false);
-      skipDirty.current = true;
+    try {
+      return await fn();
     } catch (e) {
       setError(e && e.message ? e.message : String(e));
     } finally {
@@ -187,13 +187,21 @@ export default function usePortfolioFile({
     }
   }
 
+  async function handleSave() {
+    if (!fileHandle || !password) return setError("Pick a file and enter password first.");
+    await withLoading(async () => {
+      const data = buildPortfolioData();
+      await writePortfolioFile(fileHandle, password, data);
+      setDirty(false);
+      skipDirty.current = true;
+    });
+  }
+
   async function handleCloseFile() {
     if (!fileHandle) return;
-    setLoading(true);
-    setError(null);
-      try {
-        const data = { ...DEFAULT_PORTFOLIO, assetTypes, liabilityTypes, allocation, snapshots, liabilities };
-        await writePortfolioFile(fileHandle, password, data);
+    await withLoading(async () => {
+      const data = buildPortfolioData();
+      await writePortfolioFile(fileHandle, password, data);
       setDirty(false);
       skipDirty.current = true;
       await clearSavedFile();
@@ -208,11 +216,7 @@ export default function usePortfolioFile({
       setAssetTypes(defaultAssetTypes);
       setLiabilityTypes(defaultLiabilityTypes);
       setStep("pick");
-    } catch (e) {
-      setError(e && e.message ? e.message : String(e));
-    } finally {
-      setLoading(false);
-    }
+    });
   }
 
   return {
