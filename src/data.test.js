@@ -23,6 +23,22 @@ test('rebalance returns remaining priority debt', () => {
   const liabilities = [
     { type: 'loan', value: 80, priority: true },
   ];
-  const { priorityDebt } = rebalance(assets, liabilities, {});
+  const { priorityDebt, byCat, totalNow } = rebalance(assets, liabilities, {});
   assert.equal(priorityDebt, 30);
+  const sumByCat = Object.values(byCat).reduce((a, b) => a + b, 0);
+  assert.equal(Math.round(sumByCat - priorityDebt), Math.round(totalNow));
+});
+
+test('rebalance byCat excludes priority debt from totals', () => {
+  const assets = [
+    { type: 'cash', value: 50 },
+    { type: 'stock', value: 100 },
+  ];
+  const liabilities = [
+    { type: 'loan', value: 80, priority: true },
+    { type: 'loan', value: 20 },
+  ];
+  const { byCat, priorityDebt, totalNow } = rebalance(assets, liabilities, { stock: 1 });
+  const sumByCat = Object.values(byCat).reduce((a, b) => a + b, 0);
+  assert.equal(Math.round(sumByCat - priorityDebt), Math.round(totalNow));
 });
