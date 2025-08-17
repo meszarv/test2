@@ -73,8 +73,18 @@ export function rebalance(assets, liabilities, allocPct) {
     toDeduct -= used;
   }
 
+  const priorityDebt = adjLiabilities
+    .filter((l) => l.priority)
+    .reduce((sum, l) => sum + (Number(l.value) || 0), 0);
+  const nonPriorityLiabilities = adjLiabilities.filter((l) => !l.priority);
+
   const totalNow = netWorth(adjAssets, adjLiabilities);
-  const byCat = currentByCategory(adjAssets, adjLiabilities);
+  const byCat = currentByCategory(adjAssets, nonPriorityLiabilities);
+  const totalByCat = Object.values(byCat).reduce((a, b) => a + b, 0);
+  console.assert(
+    Math.round(totalByCat - priorityDebt) === Math.round(totalNow),
+    "Category totals mismatch net worth"
+  );
   let norm = normalizeAllocation(allocPct);
   if (Object.keys(norm).length === 0) {
     const cats = Object.keys(byCat);
@@ -101,10 +111,6 @@ export function rebalance(assets, liabilities, allocPct) {
       investPlan[c] = (gaps[c] / sumGaps) * cashSurplus;
     }
   }
-  const priorityDebt = adjLiabilities
-    .filter((l) => l.priority)
-    .reduce((sum, l) => sum + (Number(l.value) || 0), 0);
-
   return { totalNow, targetTotal: totalNow, byCat, idealByCat, investPlan, priorityDebt };
 }
 
