@@ -101,8 +101,11 @@ export function rebalance(assets, liabilities, allocPct) {
       investPlan[c] = (gaps[c] / sumGaps) * cashSurplus;
     }
   }
+  const priorityDebt = adjLiabilities
+    .filter((l) => l.priority)
+    .reduce((sum, l) => sum + (Number(l.value) || 0), 0);
 
-  return { totalNow, targetTotal: totalNow, byCat, idealByCat, investPlan };
+  return { totalNow, targetTotal: totalNow, byCat, idealByCat, investPlan, priorityDebt };
 }
 
 export function groupByPeriod(points, mode) {

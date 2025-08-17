@@ -9,6 +9,7 @@ import LiabilityTable from "./components/LiabilityTable.jsx";
 import AddAssetModal from "./components/AddAssetModal.jsx";
 import AddLiabilityModal from "./components/AddLiabilityModal.jsx";
 import EditAssetModal from "./components/EditAssetModal.jsx";
+import EditLiabilityModal from "./components/EditLiabilityModal.jsx";
 import SnapshotTabs from "./components/SnapshotTabs.jsx";
 import RebalancePlan from "./components/RebalancePlan.jsx";
 import ConfigPage from "./components/ConfigPage.jsx";
@@ -37,6 +38,7 @@ export default function App() {
   const [addOpen, setAddOpen] = useState(false);
   const [addLiabilityOpen, setAddLiabilityOpen] = useState(false);
   const [editAsset, setEditAsset] = useState(null);
+  const [editLiability, setEditLiability] = useState(null);
   const [showTarget, setShowTarget] = useState(false);
 
   const {
@@ -131,6 +133,20 @@ export default function App() {
     if (confirm("Remove asset?")) {
       setAssetsAndUpdateSnapshot(assets.filter((x) => x.id !== a.id));
       setEditAsset(null);
+    }
+  }
+
+  function handleEditLiability(updated) {
+    setAssetsAndUpdateSnapshot(
+      assets,
+      liabilities.map((l) => (l.id === updated.id ? updated : l))
+    );
+  }
+
+  function handleDeleteLiability(l) {
+    if (confirm("Remove liability?")) {
+      setAssetsAndUpdateSnapshot(assets, liabilities.filter((x) => x.id !== l.id));
+      setEditLiability(null);
     }
   }
 
@@ -294,6 +310,7 @@ export default function App() {
                 prevLiabilities={prevLiabilities}
                 setLiabilities={(next) => setAssetsAndUpdateSnapshot(assets, next)}
                 liabilityTypes={liabilityTypes}
+                onEdit={(l) => setEditLiability(l)}
               />
             </Section>
 
@@ -313,6 +330,14 @@ export default function App() {
           assetTypes={assetTypes}
           onSave={handleEditAsset}
           onDelete={handleDeleteAsset}
+        />
+        <EditLiabilityModal
+          open={!!editLiability}
+          liability={editLiability}
+          onClose={() => setEditLiability(null)}
+          liabilityTypes={liabilityTypes}
+          onSave={handleEditLiability}
+          onDelete={handleDeleteLiability}
         />
         {currentIndex === snapshots.length - 1 && (
           <button
