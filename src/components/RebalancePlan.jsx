@@ -16,8 +16,8 @@ export default function RebalancePlan({ data, assetTypes }) {
     let bv;
     switch (sort.key) {
       case "current":
-        av = a === "priority_debt" ? data.priorityDebt || 0 : data.byCat[a] || 0;
-        bv = b === "priority_debt" ? data.priorityDebt || 0 : data.byCat[b] || 0;
+        av = a === "priority_debt" ? -(data.priorityDebt || 0) : data.byCat[a] || 0;
+        bv = b === "priority_debt" ? -(data.priorityDebt || 0) : data.byCat[b] || 0;
         break;
       case "ideal":
         av = a === "priority_debt" ? 0 : data.idealByCat[a] || 0;
@@ -77,7 +77,7 @@ export default function RebalancePlan({ data, assetTypes }) {
                 {c === "priority_debt" ? "Priority debt" : labelFor(c, assetTypes)}
               </td>
               <td className="py-1 text-right text-zinc-300">
-                {formatCurrency(c === "priority_debt" ? data.priorityDebt || 0 : data.byCat[c] || 0)}
+                {formatCurrency(c === "priority_debt" ? -(data.priorityDebt || 0) : data.byCat[c] || 0)}
               </td>
               <td className="py-1 text-right text-zinc-300">
                 {formatCurrency(c === "priority_debt" ? 0 : data.idealByCat[c] || 0)}
