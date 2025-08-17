@@ -1,6 +1,6 @@
 {
   "name": "test2",
-  "version": "1.0.24",
+  "version": "1.0.25",
   "description": "",
   "scripts": {
     "dev": "vite",
@@ -26,6 +26,7 @@
     "tailwindcss": "^3.4.17",
     "vite": "^7.1.2",
     "@babel/register": "^7.24.6",
-    "@babel/preset-react": "^7.24.6"
+    "@babel/preset-react": "^7.24.6",
+    "jsdom": "^24.0.0"
   }
 }
