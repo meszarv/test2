@@ -1,9 +1,11 @@
 import React, { useState } from "react";
 import TextInput from "./TextInput.jsx";
+import ConfirmModal from "./ConfirmModal.jsx";
 
 export default function SnapshotTabs({ snapshots, currentIndex, onSelect, onAdd, onChangeDate, onDelete }) {
   const [editIndex, setEditIndex] = useState(null);
   const [editValue, setEditValue] = useState("");
+  const [deleteIndex, setDeleteIndex] = useState(null);
 
   const fmt = (d) => d.toLocaleString("default", { month: "short", year: "numeric" });
   const hasCurrent = snapshots.some((s) => s.asOf.slice(0, 7) === new Date().toISOString().slice(0, 7));
@@ -68,12 +70,7 @@ export default function SnapshotTabs({ snapshots, currentIndex, onSelect, onAdd,
             />
             <div className="flex justify-between gap-2 pt-2">
               <button
-                onClick={() => {
-                  if (onDelete && window.confirm("Delete snapshot?")) {
-                    onDelete(editIndex);
-                    setEditIndex(null);
-                  }
-                }}
+                onClick={() => setDeleteIndex(editIndex)}
                 title="Delete"
                 className="px-3 py-2 rounded-lg bg-red-600 hover:bg-red-500"
               >
@@ -99,6 +96,16 @@ export default function SnapshotTabs({ snapshots, currentIndex, onSelect, onAdd,
           </div>
         </div>
       )}
+      <ConfirmModal
+        open={deleteIndex !== null}
+        title="Delete snapshot?"
+        onConfirm={() => {
+          if (onDelete) onDelete(deleteIndex);
+          setDeleteIndex(null);
+          setEditIndex(null);
+        }}
+        onCancel={() => setDeleteIndex(null)}
+      />
     </>
   );
 }
