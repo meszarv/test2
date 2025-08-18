@@ -1,11 +1,11 @@
 {
   "name": "test2",
-  "version": "1.0.37",
+  "version": "1.0.38",
   "description": "",
   "scripts": {
     "dev": "vite",
     "prebuild": "node scripts/check-env.js",
-    "build": "vite build",
+    "build": "node scripts/build.js",
     "preview": "vite preview",
     "test": "node --test",
     "predeploy": "npm run build",
