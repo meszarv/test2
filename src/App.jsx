@@ -29,6 +29,7 @@ import usePortfolioFile from "./hooks/usePortfolioFile.js";
 import useAssetManager from "./hooks/useAssetManager.js";
 import useLiabilityManager from "./hooks/useLiabilityManager.js";
 import pkg from "../package.json";
+import { initDrive } from "./drive.js";
 
 export default function App() {
   const [assetTypes, setAssetTypes] = useState(defaultAssetTypes);
@@ -44,6 +45,9 @@ export default function App() {
   const [editAsset, setEditAsset] = useState(null);
   const [editLiability, setEditLiability] = useState(null);
   const [showTarget, setShowTarget] = useState(false);
+  const driveApiKey = import.meta.env.VITE_GOOGLE_API_KEY;
+  const driveClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+  const driveReady = driveApiKey && driveClientId;
 
   const {
     snapshots,
@@ -73,6 +77,7 @@ export default function App() {
     skipDirty,
     handleOpenExisting,
     handleCreateNew,
+    handleOpenDrive,
     handleOpenSample,
     handleLoad,
     handleSave,
@@ -128,6 +133,12 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (driveReady) {
+      initDrive({ apiKey: driveApiKey, clientId: driveClientId });
+    }
+  }, [driveReady, driveApiKey, driveClientId]);
+
   const totalNow = useMemo(() => netWorth(assets, liabilities), [assets, liabilities]);
   const series = useMemo(() => buildSeries(snapshots, period), [snapshots, period]);
   const rebalancePlanData = useMemo(
@@ -150,6 +161,9 @@ export default function App() {
         <div className="min-h-screen flex flex-col items-center justify-center p-6 gap-4">
           <button onClick={handleOpenExisting} className="h-12 px-6 rounded-lg bg-blue-600 hover:bg-blue-500">Open existing file</button>
           <button onClick={handleCreateNew} className="h-12 px-6 rounded-lg bg-blue-600 hover:bg-blue-500">Create new file</button>
+          {driveReady && (
+            <button onClick={handleOpenDrive} className="h-12 px-6 rounded-lg bg-blue-600 hover:bg-blue-500">Open from Google Drive</button>
+          )}
           <button onClick={handleOpenSample} className="text-sm text-blue-400 underline">Open sample portfolio</button>
         </div>
       )}

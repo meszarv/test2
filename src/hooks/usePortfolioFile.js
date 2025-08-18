@@ -8,6 +8,7 @@ import {
   clearSavedFile,
   DEFAULT_PORTFOLIO,
 } from "../file.js";
+import { openDriveFile, readDrivePortfolioFile, writeDrivePortfolioFile } from "../drive.js";
 import { defaultAssetTypes, defaultLiabilityTypes } from "../data.js";
 import { mkId, labelFor, mkAsset } from "../utils.js";
 
@@ -29,6 +30,7 @@ export default function usePortfolioFile({
 }) {
   const [password, setPassword] = useState("");
   const [fileHandle, setFileHandle] = useState(null);
+  const [driveFileId, setDriveFileId] = useState(null);
   const [step, setStep] = useState("pick");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -82,6 +84,17 @@ export default function usePortfolioFile({
     }
   }
 
+  async function handleOpenDrive() {
+    try {
+      const id = await openDriveFile();
+      setDriveFileId(id);
+      setFileHandle(null);
+      setStep("password");
+    } catch (e) {
+      setError(e && e.message ? e.message : String(e));
+    }
+  }
+
   async function handleOpenSample() {
     setLoading(true);
     setError(null);
@@ -122,15 +135,20 @@ export default function usePortfolioFile({
   }
 
   async function handleLoad() {
-    if (!fileHandle || !password) return setError("Pick a file and enter password first.");
+    if ((!fileHandle && !driveFileId) || !password) return setError("Pick a file and enter password first.");
     setLoading(true);
     setError(null);
     try {
-      const file = await fileHandle.getFile();
-      const isEmpty = file.size === 0;
-      const data = await readPortfolioFile(fileHandle, password);
-      if (isEmpty) {
-        await writePortfolioFile(fileHandle, password, data);
+      let data;
+      if (driveFileId) {
+        data = await readDrivePortfolioFile(driveFileId, password);
+      } else {
+        const file = await fileHandle.getFile();
+        const isEmpty = file.size === 0;
+        data = await readPortfolioFile(fileHandle, password);
+        if (isEmpty) {
+          await writePortfolioFile(fileHandle, password, data);
+        }
       }
       const snaps = (data.snapshots || []).slice().sort((a, b) => new Date(a.asOf) - new Date(b.asOf));
       setSnapshots(snaps);
@@ -188,24 +206,34 @@ export default function usePortfolioFile({
   }
 
   async function handleSave() {
-    if (!fileHandle || !password) return setError("Pick a file and enter password first.");
+    if ((!fileHandle && !driveFileId) || !password) return setError("Pick a file and enter password first.");
     await withLoading(async () => {
       const data = buildPortfolioData();
-      await writePortfolioFile(fileHandle, password, data);
+      if (driveFileId) {
+        const id = await writeDrivePortfolioFile(driveFileId, password, data);
+        setDriveFileId(id);
+      } else {
+        await writePortfolioFile(fileHandle, password, data);
+      }
       setDirty(false);
       skipDirty.current = true;
     });
   }
 
   async function handleCloseFile() {
-    if (!fileHandle) return;
+    if (!fileHandle && !driveFileId) return;
     await withLoading(async () => {
       const data = buildPortfolioData();
-      await writePortfolioFile(fileHandle, password, data);
+      if (driveFileId) {
+        await writeDrivePortfolioFile(driveFileId, password, data);
+        setDriveFileId(null);
+      } else {
+        await writePortfolioFile(fileHandle, password, data);
+        await clearSavedFile();
+        setFileHandle(null);
+      }
       setDirty(false);
       skipDirty.current = true;
-      await clearSavedFile();
-      setFileHandle(null);
       setPassword("");
       setSnapshots([]);
       setCurrentIndex(0);
@@ -234,6 +262,7 @@ export default function usePortfolioFile({
     skipDirty,
     handleOpenExisting,
     handleCreateNew,
+    handleOpenDrive,
     handleOpenSample,
     handleLoad,
     handleSave,
