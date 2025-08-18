@@ -1,65 +1,59 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { formatCurrency, labelFor, pieColors } from "../utils.js";
+
+function getSortValue(category, key, data) {
+  const {
+    byCat = {},
+    idealByCat = {},
+    investPlan = {},
+    priorityDebt,
+    priorityPayoff,
+    assetTypes,
+  } = data;
+  const totalPriorityDebt = (priorityDebt || 0) + (priorityPayoff || 0);
+  switch (key) {
+    case "current":
+      return category === "priority_debt" ? -totalPriorityDebt : byCat[category] || 0;
+    case "after":
+      return category === "priority_debt"
+        ? priorityDebt
+          ? -priorityDebt
+          : 0
+        : (byCat[category] || 0) + (investPlan[category] || 0);
+    case "ideal":
+      return category === "priority_debt" ? 0 : idealByCat[category] || 0;
+    case "invest":
+      return category === "priority_debt" ? priorityPayoff || 0 : investPlan[category] || 0;
+    default:
+      return category === "priority_debt" ? "Priority debt" : labelFor(category, assetTypes);
+  }
+}
 
 export default function RebalancePlan({ data, assetTypes }) {
   const [sort, setSort] = useState({ key: "category", asc: true });
-  const totalPriorityDebt =
-    (data.priorityDebt || 0) + (data.priorityPayoff || 0);
-  const cats = Array.from(
-    new Set([
-      ...Object.keys(data.byCat || {}),
-      ...Object.keys(data.idealByCat || {}),
-      ...Object.keys(data.investPlan || {}),
-    ])
-  );
-  if (data.priorityDebt != null || data.priorityPayoff != null)
-    cats.push("priority_debt");
-  cats.sort((a, b) => {
-    let av;
-    let bv;
-    switch (sort.key) {
-      case "current":
-        av = a === "priority_debt" ? -totalPriorityDebt : data.byCat[a] || 0;
-        bv = b === "priority_debt" ? -totalPriorityDebt : data.byCat[b] || 0;
-        break;
-      case "after":
-        av =
-          a === "priority_debt"
-            ? data.priorityDebt
-              ? -data.priorityDebt
-              : 0
-            : (data.byCat[a] || 0) + (data.investPlan[a] || 0);
-        bv =
-          b === "priority_debt"
-            ? data.priorityDebt
-              ? -data.priorityDebt
-              : 0
-            : (data.byCat[b] || 0) + (data.investPlan[b] || 0);
-        break;
-      case "ideal":
-        av = a === "priority_debt" ? 0 : data.idealByCat[a] || 0;
-        bv = b === "priority_debt" ? 0 : data.idealByCat[b] || 0;
-        break;
-      case "invest":
-        av =
-          a === "priority_debt"
-            ? data.priorityPayoff || 0
-            : data.investPlan[a] || 0;
-        bv =
-          b === "priority_debt"
-            ? data.priorityPayoff || 0
-            : data.investPlan[b] || 0;
-        break;
-      default:
-        av = a === "priority_debt" ? "Priority debt" : labelFor(a, assetTypes);
-        bv = b === "priority_debt" ? "Priority debt" : labelFor(b, assetTypes);
-    }
-    if (typeof av === "string") {
-      const cmp = av.localeCompare(bv);
-      return sort.asc ? cmp : -cmp;
-    }
-    return sort.asc ? av - bv : bv - av;
-  });
+  const { cats, totalPriorityDebt } = useMemo(() => {
+    const totalPriorityDebt =
+      (data.priorityDebt || 0) + (data.priorityPayoff || 0);
+    const cats = Array.from(
+      new Set([
+        ...Object.keys(data.byCat || {}),
+        ...Object.keys(data.idealByCat || {}),
+        ...Object.keys(data.investPlan || {}),
+      ])
+    );
+    if (data.priorityDebt != null || data.priorityPayoff != null)
+      cats.push("priority_debt");
+    cats.sort((a, b) => {
+      const av = getSortValue(a, sort.key, { ...data, assetTypes });
+      const bv = getSortValue(b, sort.key, { ...data, assetTypes });
+      if (typeof av === "string") {
+        const cmp = av.localeCompare(bv);
+        return sort.asc ? cmp : -cmp;
+      }
+      return sort.asc ? av - bv : bv - av;
+    });
+    return { cats, totalPriorityDebt };
+  }, [data, sort, assetTypes]);
   if (cats.length === 0) return null;
   const colorMap = {};
   Object.keys(data.byCat || {}).forEach((c, i) => {
