@@ -1813,21 +1813,29 @@ async function writePortfolioFile(handle, password, data) {
 }
 let tokenClient;
 let driveApiKey;
+let driveReady = false;
 function initDrive({ apiKey, clientId }) {
   driveApiKey = apiKey;
   return new Promise((resolve) => {
     gapi.load("client", async () => {
-      await gapi.client.init({
-        apiKey,
-        discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"]
-      });
-      resolve();
-    });
-    tokenClient = google.accounts.oauth2.initTokenClient({
-      client_id: clientId,
-      scope: "https://www.googleapis.com/auth/drive.file",
-      callback: () => {
+      try {
+        await gapi.client.init({
+          apiKey,
+          discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"]
+        });
+        tokenClient = google.accounts.oauth2.initTokenClient({
+          client_id: clientId,
+          scope: "https://www.googleapis.com/auth/drive.file",
+          callback: () => {
+          }
+        });
+        driveReady = true;
+      } catch (err) {
+        console.error("Failed to initialize Google Drive", err);
+        tokenClient = void 0;
+        driveReady = false;
       }
+      resolve();
     });
   });
 }
@@ -1838,7 +1846,7 @@ function ensureToken() {
   });
 }
 async function openDriveFile() {
-  if (!gapi?.client?.getToken) return;
+  if (!driveReady || !gapi?.client?.getToken || !tokenClient) return;
   await ensureToken();
   return new Promise((resolve) => {
     gapi.load("picker", () => {
@@ -1852,6 +1860,7 @@ async function openDriveFile() {
   });
 }
 async function readDrivePortfolioFile(fileId, password) {
+  if (!driveReady || !tokenClient) return;
   await ensureToken();
   const token = gapi.client.getToken().access_token;
   const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
@@ -1862,6 +1871,7 @@ async function readDrivePortfolioFile(fileId, password) {
   return await decryptPortfolio(buf, password);
 }
 async function writeDrivePortfolioFile(fileId, password, data) {
+  if (!driveReady || !tokenClient) return;
   await ensureToken();
   const token = gapi.client.getToken().access_token;
   const payload = await encryptPortfolio(data, password);
@@ -2199,7 +2209,7 @@ function useLiabilityManager({ assets, liabilities, liabilityTypes, setAssetsAnd
     cancelDeleteLiability
   };
 }
-const version = "1.0.40";
+const version = "1.0.43";
 const pkg = {
   version
 };
@@ -2217,9 +2227,9 @@ function App() {
   const [editAsset, setEditAsset] = reactExports.useState(null);
   const [editLiability, setEditLiability] = reactExports.useState(null);
   const [showTarget, setShowTarget] = reactExports.useState(false);
-  const driveApiKey2 = "foo";
-  const driveClientId = "bar";
-  const driveReady = driveClientId;
+  const driveApiKey2 = "AIzaSyD9IhFBHBHEs729edMO7LsoKZFlTfsnv5U";
+  const driveClientId = "967365398072-sj6mjo1r3pdg18frmdl5aoafnvbbsfob.apps.googleusercontent.com";
+  const driveReady2 = driveClientId;
   const {
     snapshots,
     setSnapshots,
@@ -2299,7 +2309,7 @@ function App() {
     {
       initDrive({ apiKey: driveApiKey2, clientId: driveClientId });
     }
-  }, [driveReady, driveApiKey2, driveClientId]);
+  }, [driveReady2, driveApiKey2, driveClientId]);
   const totalNow = reactExports.useMemo(() => netWorth(assets, liabilities), [assets, liabilities]);
   const series = reactExports.useMemo(() => buildSeries(snapshots, period), [snapshots, period]);
   const rebalancePlanData = reactExports.useMemo(

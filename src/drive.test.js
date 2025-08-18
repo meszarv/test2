@@ -96,3 +96,36 @@ test('openDriveFile returns undefined if gapi client uninitialized', async () =>
   const result = await openDriveFile();
   assert.equal(result, undefined);
 });
+
+test('initDrive handles discovery failure', async () => {
+  global.gapi = {
+    load: (name, cb) => cb(),
+    client: {
+      init: async () => {
+        throw new Error('fail');
+      },
+    },
+  };
+  let tokenInitCalled = false;
+  global.google = {
+    accounts: {
+      oauth2: {
+        initTokenClient: () => {
+          tokenInitCalled = true;
+          return {};
+        },
+      },
+    },
+  };
+  let errorMessage;
+  const originalError = console.error;
+  console.error = (msg) => {
+    errorMessage = msg;
+  };
+  await initDrive({ apiKey: 'key', clientId: 'id' });
+  const result = await openDriveFile();
+  assert.equal(result, undefined);
+  assert.equal(tokenInitCalled, false);
+  assert.ok(String(errorMessage).includes('Failed to initialize Google Drive'));
+  console.error = originalError;
+});

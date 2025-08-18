@@ -2,21 +2,29 @@ import { encryptPortfolio, decryptPortfolio, DEFAULT_PORTFOLIO } from "./file.js
 
 let tokenClient;
 let driveApiKey;
+let driveReady = false;
 
 export function initDrive({ apiKey, clientId }) {
   driveApiKey = apiKey;
   return new Promise((resolve) => {
     gapi.load("client", async () => {
-      await gapi.client.init({
-        apiKey,
-        discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"],
-      });
+      try {
+        await gapi.client.init({
+          apiKey,
+          discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"],
+        });
+        tokenClient = google.accounts.oauth2.initTokenClient({
+          client_id: clientId,
+          scope: "https://www.googleapis.com/auth/drive.file",
+          callback: () => {},
+        });
+        driveReady = true;
+      } catch (err) {
+        console.error("Failed to initialize Google Drive", err);
+        tokenClient = undefined;
+        driveReady = false;
+      }
       resolve();
-    });
-    tokenClient = google.accounts.oauth2.initTokenClient({
-      client_id: clientId,
-      scope: "https://www.googleapis.com/auth/drive.file",
-      callback: () => {},
     });
   });
 }
@@ -29,7 +37,7 @@ function ensureToken() {
 }
 
 export async function openDriveFile() {
-  if (!gapi?.client?.getToken) return;
+  if (!driveReady || !gapi?.client?.getToken || !tokenClient) return;
   await ensureToken();
   return new Promise((resolve) => {
     gapi.load("picker", () => {
@@ -49,6 +57,7 @@ export async function openDriveFile() {
 }
 
 export async function readDrivePortfolioFile(fileId, password) {
+  if (!driveReady || !tokenClient) return;
   await ensureToken();
   const token = gapi.client.getToken().access_token;
   const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
@@ -60,6 +69,7 @@ export async function readDrivePortfolioFile(fileId, password) {
 }
 
 export async function writeDrivePortfolioFile(fileId, password, data) {
+  if (!driveReady || !tokenClient) return;
   await ensureToken();
   const token = gapi.client.getToken().access_token;
   const payload = await encryptPortfolio(data, password);
