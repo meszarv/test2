@@ -14,7 +14,8 @@ import SnapshotTabs from "./components/SnapshotTabs.jsx";
 import RebalancePlan from "./components/RebalancePlan.jsx";
 import ConfigPage from "./components/ConfigPage.jsx";
 import AddBtn from "./components/AddBtn.jsx";
-import { mkAsset, formatCurrency } from "./utils.js";
+import ConfirmModal from "./components/ConfirmModal.jsx";
+import { formatCurrency } from "./utils.js";
 import {
   defaultAssetTypes,
   defaultLiabilityTypes,
@@ -25,6 +26,8 @@ import {
 } from "./data.js";
 import useSnapshots from "./hooks/useSnapshots.js";
 import usePortfolioFile from "./hooks/usePortfolioFile.js";
+import useAssetManager from "./hooks/useAssetManager.js";
+import useLiabilityManager from "./hooks/useLiabilityManager.js";
 import pkg from "../package.json";
 
 export default function App() {
@@ -91,6 +94,35 @@ export default function App() {
     setCurrentIndex,
   });
 
+  const {
+    addAsset,
+    updateAsset,
+    requestDeleteAsset,
+    assetToDelete,
+    confirmDeleteAsset,
+    cancelDeleteAsset,
+  } = useAssetManager({
+    assets,
+    assetTypes,
+    setAssetsAndUpdateSnapshot,
+    setEditAsset,
+  });
+
+  const {
+    addLiability,
+    updateLiability,
+    requestDeleteLiability,
+    liabilityToDelete,
+    confirmDeleteLiability,
+    cancelDeleteLiability,
+  } = useLiabilityManager({
+    assets,
+    liabilities,
+    liabilityTypes,
+    setAssetsAndUpdateSnapshot,
+    setEditLiability,
+  });
+
   useEffect(() => {
     snapshotFromAssets(assets, liabilities);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -109,47 +141,7 @@ export default function App() {
   );
   const currentAllocation = useMemo(() => currentByCategory(assets, liabilities), [assets, liabilities]);
 
-  function handleAddAsset({ name, type, description, value }) {
-    const asset = mkAsset(type, assetTypes, name);
-    asset.description = description;
-    asset.value = value;
-    setAssetsAndUpdateSnapshot([...assets, asset]);
-  }
-
-  function handleAddLiability({ name, type, description, value }) {
-    const liability = mkAsset(type, liabilityTypes, name);
-    liability.description = description;
-    liability.value = value;
-    liability.priority = false;
-    setAssetsAndUpdateSnapshot(assets, [...liabilities, liability]);
-  }
-
-  function handleEditAsset(updated) {
-    setAssetsAndUpdateSnapshot(
-      assets.map((a) => (a.id === updated.id ? updated : a))
-    );
-  }
-
-  function handleDeleteAsset(a) {
-    if (confirm("Remove asset?")) {
-      setAssetsAndUpdateSnapshot(assets.filter((x) => x.id !== a.id));
-      setEditAsset(null);
-    }
-  }
-
-  function handleEditLiability(updated) {
-    setAssetsAndUpdateSnapshot(
-      assets,
-      liabilities.map((l) => (l.id === updated.id ? updated : l))
-    );
-  }
-
-  function handleDeleteLiability(l) {
-    if (confirm("Remove liability?")) {
-      setAssetsAndUpdateSnapshot(assets, liabilities.filter((x) => x.id !== l.id));
-      setEditLiability(null);
-    }
-  }
+  // Asset and liability management handled via custom hooks
 
 
   return (
@@ -320,28 +312,40 @@ export default function App() {
 
         </div>
         <footer className="text-center text-xs text-zinc-500 mt-12">v{pkg.version}</footer>
-        <AddAssetModal open={addOpen} onClose={() => setAddOpen(false)} assetTypes={assetTypes} onAdd={handleAddAsset} />
+        <AddAssetModal open={addOpen} onClose={() => setAddOpen(false)} assetTypes={assetTypes} onAdd={addAsset} />
         <AddLiabilityModal
           open={addLiabilityOpen}
           onClose={() => setAddLiabilityOpen(false)}
           liabilityTypes={liabilityTypes}
-          onAdd={handleAddLiability}
+          onAdd={addLiability}
         />
         <EditAssetModal
           open={!!editAsset}
           asset={editAsset}
           onClose={() => setEditAsset(null)}
           assetTypes={assetTypes}
-          onSave={handleEditAsset}
-          onDelete={handleDeleteAsset}
+          onSave={updateAsset}
+          onDelete={requestDeleteAsset}
         />
         <EditLiabilityModal
           open={!!editLiability}
           liability={editLiability}
           onClose={() => setEditLiability(null)}
           liabilityTypes={liabilityTypes}
-          onSave={handleEditLiability}
-          onDelete={handleDeleteLiability}
+          onSave={updateLiability}
+          onDelete={requestDeleteLiability}
+        />
+        <ConfirmModal
+          open={!!assetToDelete}
+          title="Remove asset?"
+          onConfirm={confirmDeleteAsset}
+          onCancel={cancelDeleteAsset}
+        />
+        <ConfirmModal
+          open={!!liabilityToDelete}
+          title="Remove liability?"
+          onConfirm={confirmDeleteLiability}
+          onCancel={cancelDeleteLiability}
         />
         </>
       )}
