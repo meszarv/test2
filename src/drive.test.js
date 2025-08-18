@@ -31,14 +31,34 @@ test('initDrive initializes gapi client and token client', async () => {
   assert.equal(tokenArgs.client_id, 'id');
 });
 
-test('openDriveFile uses stored API key', async () => {
-  let developerKey;
-  let pickerCallback;
+test('openDriveFile prompts for filename and searches drive', async () => {
+  let listArgs;
+  global.localStorage = {
+    store: {},
+    getItem(key) {
+      return this.store[key];
+    },
+    setItem(key, val) {
+      this.store[key] = val;
+    },
+  };
+  global.prompt = (msg, def) => {
+    assert.equal(def, 'portfolio.enc');
+    return 'test.enc';
+  };
   global.gapi = {
     load: (name, cb) => cb(),
     client: {
       init: async () => {},
       getToken: () => ({ access_token: 'token' }),
+      drive: {
+        files: {
+          list: async (args) => {
+            listArgs = args;
+            return { result: { files: [{ id: '123' }] } };
+          },
+        },
+      },
     },
   };
   let tokenClientObj;
@@ -48,7 +68,7 @@ test('openDriveFile uses stored API key', async () => {
         initTokenClient: ({ callback }) => {
           tokenClientObj = {
             callback,
-            requestAccessToken: function () {
+            requestAccessToken() {
               this.callback();
             },
           };
@@ -56,39 +76,14 @@ test('openDriveFile uses stored API key', async () => {
         },
       },
     },
-    picker: {
-      ViewId: { DOCS: 'docs' },
-      Action: { PICKED: 'picked' },
-      PickerBuilder: function () {
-        return {
-          addView() {
-            return this;
-          },
-          setOAuthToken() {
-            return this;
-          },
-          setDeveloperKey(key) {
-            developerKey = key;
-            return this;
-          },
-          setCallback(cb) {
-            pickerCallback = cb;
-            return this;
-          },
-          build() {
-            return { setVisible: () => {} };
-          },
-        };
-      },
-    },
   };
   await initDrive({ apiKey: 'key', clientId: 'id' });
-  const promise = openDriveFile();
-  await Promise.resolve();
-  pickerCallback({ action: google.picker.Action.PICKED, docs: [{ id: '123' }] });
-  const id = await promise;
-  assert.equal(developerKey, 'key');
+  const id = await openDriveFile();
   assert.equal(id, '123');
+  assert.ok(listArgs.q.includes("name='test.enc'"));
+  assert.equal(localStorage.getItem('driveFilename'), 'test.enc');
+  delete global.localStorage;
+  delete global.prompt;
 });
 
 test('openDriveFile returns undefined if gapi client uninitialized', async () => {
