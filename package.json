@@ -1,6 +1,6 @@
 {
   "name": "test2",
-  "version": "1.0.32",
+  "version": "1.0.33",
   "description": "",
   "scripts": {
     "dev": "vite",
