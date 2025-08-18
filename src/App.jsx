@@ -357,7 +357,16 @@ export default function App() {
               <h2 className="text-xl font-semibold">Configuration</h2>
               <button onClick={() => setConfigOpen(false)} title="Close" className="h-8 w-8 rounded-lg bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 flex items-center justify-center">✖</button>
             </div>
-            <ConfigPage assetTypes={assetTypes} setAssetTypes={setAssetTypes} allocation={allocation} setAllocation={setAllocation} assets={assets} />
+            <ConfigPage
+              assetTypes={assetTypes}
+              setAssetTypes={setAssetTypes}
+              liabilityTypes={liabilityTypes}
+              setLiabilityTypes={setLiabilityTypes}
+              allocation={allocation}
+              setAllocation={setAllocation}
+              assets={assets}
+              liabilities={liabilities}
+            />
           </div>
         </div>
       )}
