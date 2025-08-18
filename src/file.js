@@ -91,6 +91,14 @@ function equalBytes(a, b) {
   return true;
 }
 
+export async function encryptPortfolio(data, password) {
+  return await encryptJson(data, password);
+}
+
+export async function decryptPortfolio(buf, password) {
+  return await decryptJson(buf, password);
+}
+
 export const DEFAULT_PORTFOLIO = {
   version: 5,
   currency: "USD",
