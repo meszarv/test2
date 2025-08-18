@@ -6,5 +6,15 @@ export default defineConfig({
   base: './',
   build: {
     outDir: 'docs',
+    minify: false,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            return 'vendor';
+          }
+        },
+      },
+    },
   },
 });
