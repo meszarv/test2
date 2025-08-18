@@ -1812,7 +1812,9 @@ async function writePortfolioFile(handle, password, data) {
   await writable.close();
 }
 let tokenClient;
+let driveApiKey;
 function initDrive({ apiKey, clientId }) {
+  driveApiKey = apiKey;
   return new Promise((resolve) => {
     gapi.load("client", async () => {
       await gapi.client.init({
@@ -1836,10 +1838,11 @@ function ensureToken() {
   });
 }
 async function openDriveFile() {
+  if (!gapi?.client?.getToken) return;
   await ensureToken();
   return new Promise((resolve) => {
     gapi.load("picker", () => {
-      const picker = new google.picker.PickerBuilder().addView(google.picker.ViewId.DOCS).setOAuthToken(gapi.client.getToken().access_token).setDeveloperKey(gapi.client._options.apiKey).setCallback((data) => {
+      const picker = new google.picker.PickerBuilder().addView(google.picker.ViewId.DOCS).setOAuthToken(gapi.client.getToken().access_token).setDeveloperKey(driveApiKey).setCallback((data) => {
         if (data.action === google.picker.Action.PICKED) {
           resolve(data.docs[0].id);
         }
@@ -2196,7 +2199,7 @@ function useLiabilityManager({ assets, liabilities, liabilityTypes, setAssetsAnd
     cancelDeleteLiability
   };
 }
-const version = "1.0.39";
+const version = "1.0.40";
 const pkg = {
   version
 };
@@ -2214,8 +2217,8 @@ function App() {
   const [editAsset, setEditAsset] = reactExports.useState(null);
   const [editLiability, setEditLiability] = reactExports.useState(null);
   const [showTarget, setShowTarget] = reactExports.useState(false);
-  const driveApiKey = "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";
-  const driveClientId = "967365398072-sj6mjo1r3pdg18frmdl5aoafnvbbsfob.apps.googleusercontent.com";
+  const driveApiKey2 = "foo";
+  const driveClientId = "bar";
   const driveReady = driveClientId;
   const {
     snapshots,
@@ -2294,9 +2297,9 @@ function App() {
   }, []);
   reactExports.useEffect(() => {
     {
-      initDrive({ apiKey: driveApiKey, clientId: driveClientId });
+      initDrive({ apiKey: driveApiKey2, clientId: driveClientId });
     }
-  }, [driveReady, driveApiKey, driveClientId]);
+  }, [driveReady, driveApiKey2, driveClientId]);
   const totalNow = reactExports.useMemo(() => netWorth(assets, liabilities), [assets, liabilities]);
   const series = reactExports.useMemo(() => buildSeries(snapshots, period), [snapshots, period]);
   const rebalancePlanData = reactExports.useMemo(

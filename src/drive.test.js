@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { initDrive } from './drive.js';
+import { initDrive, openDriveFile } from './drive.js';
 
 test('initDrive initializes gapi client and token client', async () => {
   let initArgs;
@@ -29,4 +29,70 @@ test('initDrive initializes gapi client and token client', async () => {
   await initDrive({ apiKey: 'key', clientId: 'id' });
   assert.equal(initArgs.apiKey, 'key');
   assert.equal(tokenArgs.client_id, 'id');
+});
+
+test('openDriveFile uses stored API key', async () => {
+  let developerKey;
+  let pickerCallback;
+  global.gapi = {
+    load: (name, cb) => cb(),
+    client: {
+      init: async () => {},
+      getToken: () => ({ access_token: 'token' }),
+    },
+  };
+  let tokenClientObj;
+  global.google = {
+    accounts: {
+      oauth2: {
+        initTokenClient: ({ callback }) => {
+          tokenClientObj = {
+            callback,
+            requestAccessToken: function () {
+              this.callback();
+            },
+          };
+          return tokenClientObj;
+        },
+      },
+    },
+    picker: {
+      ViewId: { DOCS: 'docs' },
+      Action: { PICKED: 'picked' },
+      PickerBuilder: function () {
+        return {
+          addView() {
+            return this;
+          },
+          setOAuthToken() {
+            return this;
+          },
+          setDeveloperKey(key) {
+            developerKey = key;
+            return this;
+          },
+          setCallback(cb) {
+            pickerCallback = cb;
+            return this;
+          },
+          build() {
+            return { setVisible: () => {} };
+          },
+        };
+      },
+    },
+  };
+  await initDrive({ apiKey: 'key', clientId: 'id' });
+  const promise = openDriveFile();
+  await Promise.resolve();
+  pickerCallback({ action: google.picker.Action.PICKED, docs: [{ id: '123' }] });
+  const id = await promise;
+  assert.equal(developerKey, 'key');
+  assert.equal(id, '123');
+});
+
+test('openDriveFile returns undefined if gapi client uninitialized', async () => {
+  global.gapi = {};
+  const result = await openDriveFile();
+  assert.equal(result, undefined);
 });

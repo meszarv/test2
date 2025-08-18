@@ -1,8 +1,10 @@
 import { encryptPortfolio, decryptPortfolio, DEFAULT_PORTFOLIO } from "./file.js";
 
 let tokenClient;
+let driveApiKey;
 
 export function initDrive({ apiKey, clientId }) {
+  driveApiKey = apiKey;
   return new Promise((resolve) => {
     gapi.load("client", async () => {
       await gapi.client.init({
@@ -27,13 +29,14 @@ function ensureToken() {
 }
 
 export async function openDriveFile() {
+  if (!gapi?.client?.getToken) return;
   await ensureToken();
   return new Promise((resolve) => {
     gapi.load("picker", () => {
       const picker = new google.picker.PickerBuilder()
         .addView(google.picker.ViewId.DOCS)
         .setOAuthToken(gapi.client.getToken().access_token)
-        .setDeveloperKey(gapi.client._options.apiKey)
+        .setDeveloperKey(driveApiKey)
         .setCallback((data) => {
           if (data.action === google.picker.Action.PICKED) {
             resolve(data.docs[0].id);
