@@ -1812,10 +1812,9 @@ async function writePortfolioFile(handle, password, data) {
   await writable.close();
 }
 let tokenClient;
-let driveApiKey;
 let driveReady = false;
+const DRIVE_FILENAME_KEY = "driveFilename";
 function initDrive({ apiKey, clientId }) {
-  driveApiKey = apiKey;
   return new Promise((resolve) => {
     gapi.load("client", async () => {
       try {
@@ -1848,16 +1847,17 @@ function ensureToken() {
 async function openDriveFile() {
   if (!driveReady || !gapi?.client?.getToken || !tokenClient) return;
   await ensureToken();
-  return new Promise((resolve) => {
-    gapi.load("picker", () => {
-      const picker = new google.picker.PickerBuilder().addView(google.picker.ViewId.DOCS).setOAuthToken(gapi.client.getToken().access_token).setDeveloperKey(driveApiKey).setCallback((data) => {
-        if (data.action === google.picker.Action.PICKED) {
-          resolve(data.docs[0].id);
-        }
-      }).build();
-      picker.setVisible(true);
-    });
+  const defaultName = localStorage.getItem(DRIVE_FILENAME_KEY) || "portfolio.enc";
+  const name = prompt("Enter Google Drive filename", defaultName);
+  if (!name) return;
+  localStorage.setItem(DRIVE_FILENAME_KEY, name);
+  const res = await gapi.client.drive.files.list({
+    q: `name='${name.replace(/['\\]/g, "\\$&")}' and trashed=false`,
+    pageSize: 1,
+    fields: "files(id)"
   });
+  const file = res?.result?.files?.[0];
+  return file?.id;
 }
 async function readDrivePortfolioFile(fileId, password) {
   if (!driveReady || !tokenClient) return;
@@ -1875,7 +1875,7 @@ async function writeDrivePortfolioFile(fileId, password, data) {
   await ensureToken();
   const token = gapi.client.getToken().access_token;
   const payload = await encryptPortfolio(data, password);
-  const metadata = { name: "portfolio.enc" };
+  const metadata = { name: localStorage.getItem(DRIVE_FILENAME_KEY) || "portfolio.enc" };
   const form = new FormData();
   form.append("metadata", new Blob([JSON.stringify(metadata)], { type: "application/json" }));
   form.append("file", new Blob([payload], { type: "application/octet-stream" }));
@@ -2209,7 +2209,7 @@ function useLiabilityManager({ assets, liabilities, liabilityTypes, setAssetsAnd
     cancelDeleteLiability
   };
 }
-const version = "1.0.43";
+const version = "1.0.45";
 const pkg = {
   version
 };
@@ -2227,7 +2227,7 @@ function App() {
   const [editAsset, setEditAsset] = reactExports.useState(null);
   const [editLiability, setEditLiability] = reactExports.useState(null);
   const [showTarget, setShowTarget] = reactExports.useState(false);
-  const driveApiKey2 = "AIzaSyD9IhFBHBHEs729edMO7LsoKZFlTfsnv5U";
+  const driveApiKey = "AIzaSyD9IhFBHBHEs729edMO7LsoKZFlTfsnv5U";
   const driveClientId = "967365398072-sj6mjo1r3pdg18frmdl5aoafnvbbsfob.apps.googleusercontent.com";
   const driveReady2 = driveClientId;
   const {
@@ -2307,9 +2307,9 @@ function App() {
   }, []);
   reactExports.useEffect(() => {
     {
-      initDrive({ apiKey: driveApiKey2, clientId: driveClientId });
+      initDrive({ apiKey: driveApiKey, clientId: driveClientId });
     }
-  }, [driveReady2, driveApiKey2, driveClientId]);
+  }, [driveReady2, driveApiKey, driveClientId]);
   const totalNow = reactExports.useMemo(() => netWorth(assets, liabilities), [assets, liabilities]);
   const series = reactExports.useMemo(() => buildSeries(snapshots, period), [snapshots, period]);
   const rebalancePlanData = reactExports.useMemo(

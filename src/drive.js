@@ -3,6 +3,7 @@ import { encryptPortfolio, decryptPortfolio, DEFAULT_PORTFOLIO } from "./file.js
 let tokenClient;
 let driveApiKey;
 let driveReady = false;
+const DRIVE_FILENAME_KEY = "driveFilename";
 
 export function initDrive({ apiKey, clientId }) {
   driveApiKey = apiKey;
@@ -39,21 +40,17 @@ function ensureToken() {
 export async function openDriveFile() {
   if (!driveReady || !gapi?.client?.getToken || !tokenClient) return;
   await ensureToken();
-  return new Promise((resolve) => {
-    gapi.load("picker", () => {
-      const picker = new google.picker.PickerBuilder()
-        .addView(google.picker.ViewId.DOCS)
-        .setOAuthToken(gapi.client.getToken().access_token)
-        .setDeveloperKey(driveApiKey)
-        .setCallback((data) => {
-          if (data.action === google.picker.Action.PICKED) {
-            resolve(data.docs[0].id);
-          }
-        })
-        .build();
-      picker.setVisible(true);
-    });
+  const defaultName = localStorage.getItem(DRIVE_FILENAME_KEY) || "portfolio.enc";
+  const name = prompt("Enter Google Drive filename", defaultName);
+  if (!name) return;
+  localStorage.setItem(DRIVE_FILENAME_KEY, name);
+  const res = await gapi.client.drive.files.list({
+    q: `name='${name.replace(/['\\]/g, "\\$&")}' and trashed=false`,
+    pageSize: 1,
+    fields: "files(id)",
   });
+  const file = res?.result?.files?.[0];
+  return file?.id;
 }
 
 export async function readDrivePortfolioFile(fileId, password) {
@@ -73,7 +70,7 @@ export async function writeDrivePortfolioFile(fileId, password, data) {
   await ensureToken();
   const token = gapi.client.getToken().access_token;
   const payload = await encryptPortfolio(data, password);
-  const metadata = { name: "portfolio.enc" };
+  const metadata = { name: localStorage.getItem(DRIVE_FILENAME_KEY) || "portfolio.enc" };
   const form = new FormData();
   form.append("metadata", new Blob([JSON.stringify(metadata)], { type: "application/json" }));
   form.append("file", new Blob([payload], { type: "application/octet-stream" }));
