@@ -10,6 +10,9 @@ if (missing.length) {
   process.exit(1);
 }
 
+// Embed build timestamp so the app can display when it was built
+process.env.VITE_BUILD_TIME = new Date().toISOString();
+
 // Run vite build to output to docs
 execSync('vite build', { stdio: 'inherit' });
 

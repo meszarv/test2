@@ -2253,7 +2253,7 @@ function useLiabilityManager({ assets, liabilities, liabilityTypes, setAssetsAnd
     cancelDeleteLiability
   };
 }
-const version = "1.0.51";
+const version = "1.0.52";
 const pkg = {
   version
 };
@@ -2274,6 +2274,19 @@ function App() {
   const driveApiKey = "AIzaSyD9IhFBHBHEs729edMO7LsoKZFlTfsnv5U";
   const driveClientId = "967365398072-sj6mjo1r3pdg18frmdl5aoafnvbbsfob.apps.googleusercontent.com";
   const driveReady2 = driveClientId;
+  const builtAgo = reactExports.useMemo(() => {
+    const ts = "2025-08-19T16:40:16.681Z";
+    const diff = Date.now() - new Date(ts).getTime();
+    const rtf = new Intl.RelativeTimeFormat(void 0, { numeric: "auto" });
+    const seconds = Math.floor(diff / 1e3);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+    if (days > 0) return rtf.format(-days, "day");
+    if (hours > 0) return rtf.format(-hours, "hour");
+    if (minutes > 0) return rtf.format(-minutes, "minute");
+    return rtf.format(-seconds, "second");
+  }, []);
   const {
     snapshots,
     setSnapshots,
@@ -2371,7 +2384,11 @@ function App() {
       /* @__PURE__ */ jsxRuntimeExports.jsx("button", { onClick: handleOpenExisting, className: "h-12 px-6 rounded-lg bg-blue-600 hover:bg-blue-500", children: "Open existing file" }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("button", { onClick: handleCreateNew, className: "h-12 px-6 rounded-lg bg-blue-600 hover:bg-blue-500", children: "Create new file" }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("button", { onClick: handleOpenDrive, className: "h-12 px-6 rounded-lg bg-blue-600 hover:bg-blue-500", children: "Open from Google Drive" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { onClick: handleOpenSample, className: "text-sm text-blue-400 underline", children: "Open sample portfolio" })
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { onClick: handleOpenSample, className: "text-sm text-blue-400 underline", children: "Open sample portfolio" }),
+      builtAgo && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-sm text-zinc-400", children: [
+        "Built ",
+        builtAgo
+      ] })
     ] }),
     step === "password" && /* @__PURE__ */ jsxRuntimeExports.jsxs("form", { onSubmit: (e) => {
       e.preventDefault();
