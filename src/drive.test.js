@@ -4,6 +4,16 @@ import { initDrive, openDriveFile } from './drive.js';
 
 test('initDrive initializes gapi client and token client', async () => {
   let initArgs;
+  global.window = {
+    location: {
+      origin: 'https://example.com',
+      href: 'https://example.com/',
+      hash: '',
+      search: '',
+      pathname: '/',
+    },
+    history: { replaceState: () => {} },
+  };
   global.gapi = {
     load: (name, cb) => {
       assert.equal(name, 'client');
@@ -29,10 +39,23 @@ test('initDrive initializes gapi client and token client', async () => {
   await initDrive({ apiKey: 'key', clientId: 'id' });
   assert.equal(initArgs.apiKey, 'key');
   assert.equal(tokenArgs.client_id, 'id');
+  assert.equal(tokenArgs.ux_mode, 'redirect');
+  assert.equal(tokenArgs.redirect_uri, 'https://example.com');
+  delete global.window;
 });
 
 test('openDriveFile prompts for filename and searches drive', async () => {
   let listArgs;
+  global.window = {
+    location: {
+      origin: 'https://example.com',
+      href: 'https://example.com/',
+      hash: '',
+      search: '',
+      pathname: '/',
+    },
+    history: { replaceState: () => {} },
+  };
   global.localStorage = {
     store: {},
     getItem(key) {
@@ -61,18 +84,16 @@ test('openDriveFile prompts for filename and searches drive', async () => {
       },
     },
   };
-  let tokenClientObj;
+  let requested = false;
   global.google = {
     accounts: {
       oauth2: {
-        initTokenClient: ({ callback }) => {
-          tokenClientObj = {
-            callback,
+        initTokenClient: () => {
+          return {
             requestAccessToken() {
-              this.callback();
+              requested = true;
             },
           };
-          return tokenClientObj;
         },
       },
     },
@@ -82,8 +103,10 @@ test('openDriveFile prompts for filename and searches drive', async () => {
   assert.equal(id, '123');
   assert.ok(listArgs.q.includes("name='test.enc'"));
   assert.equal(localStorage.getItem('driveFilename'), 'test.enc');
+  assert.equal(requested, false);
   delete global.localStorage;
   delete global.prompt;
+  delete global.window;
 });
 
 test('openDriveFile returns undefined if gapi client uninitialized', async () => {
@@ -93,6 +116,16 @@ test('openDriveFile returns undefined if gapi client uninitialized', async () =>
 });
 
 test('initDrive handles discovery failure', async () => {
+  global.window = {
+    location: {
+      origin: 'https://example.com',
+      href: 'https://example.com/',
+      hash: '',
+      search: '',
+      pathname: '/',
+    },
+    history: { replaceState: () => {} },
+  };
   global.gapi = {
     load: (name, cb) => cb(),
     client: {
@@ -123,4 +156,44 @@ test('initDrive handles discovery failure', async () => {
   assert.equal(tokenInitCalled, false);
   assert.ok(String(errorMessage).includes('Failed to initialize Google Drive'));
   console.error = originalError;
+  delete global.window;
+});
+
+test('initDrive sets token from URL and clears params', async () => {
+  let setTokenArgs;
+  let replacedUrl;
+  global.window = {
+    location: {
+      origin: 'https://example.com',
+      href: 'https://example.com/?code=abc#access_token=xyz',
+      hash: '#access_token=xyz',
+      search: '?code=abc',
+      pathname: '/',
+    },
+    history: {
+      replaceState: (_, __, url) => {
+        replacedUrl = url;
+      },
+    },
+  };
+  global.gapi = {
+    load: (name, cb) => cb(),
+    client: {
+      init: async () => {},
+      setToken: (args) => {
+        setTokenArgs = args;
+      },
+    },
+  };
+  global.google = {
+    accounts: {
+      oauth2: {
+        initTokenClient: () => ({})
+      },
+    },
+  };
+  await initDrive({ apiKey: 'key', clientId: 'id' });
+  assert.deepEqual(setTokenArgs, { access_token: 'xyz' });
+  assert.equal(replacedUrl, 'https://example.com/');
+  delete global.window;
 });

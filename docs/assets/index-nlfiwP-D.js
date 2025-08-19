@@ -1822,11 +1822,26 @@ function initDrive({ apiKey, clientId }) {
           apiKey,
           discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"]
         });
+        const url = new URL(window.location.href);
+        const hashParams = new URLSearchParams(url.hash.replace(/^#/, ""));
+        const searchParams = url.searchParams;
+        const accessToken = hashParams.get("access_token") || searchParams.get("access_token");
+        const code = searchParams.get("code") || hashParams.get("code");
+        if (accessToken || code) {
+          gapi.client.setToken(
+            accessToken ? { access_token: accessToken } : { code }
+          );
+          url.hash = "";
+          url.search = "";
+          window.history.replaceState({}, "", url.toString());
+        }
         tokenClient = google.accounts.oauth2.initTokenClient({
           client_id: clientId,
           scope: "https://www.googleapis.com/auth/drive.file",
           callback: () => {
-          }
+          },
+          ux_mode: "redirect",
+          redirect_uri: window.location.origin
         });
         driveReady = true;
       } catch (err) {
@@ -1839,6 +1854,10 @@ function initDrive({ apiKey, clientId }) {
   });
 }
 function ensureToken() {
+  const token = gapi.client.getToken();
+  if (token?.access_token) {
+    return Promise.resolve();
+  }
   return new Promise((resolve) => {
     tokenClient.callback = () => resolve();
     tokenClient.requestAccessToken();
@@ -2223,7 +2242,7 @@ function useLiabilityManager({ assets, liabilities, liabilityTypes, setAssetsAnd
     cancelDeleteLiability
   };
 }
-const version = "1.0.47";
+const version = "1.0.48";
 const pkg = {
   version
 };
