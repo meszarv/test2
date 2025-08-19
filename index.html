@@ -3,7 +3,6 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin-allow-popups" />
     <title>Portfolio Tracker</title>
   </head>
   <body>
@@ -11,5 +10,10 @@
     <script async defer src="https://accounts.google.com/gsi/client"></script>
     <script async defer src="https://apis.google.com/js/api.js"></script>
     <script type="module" src="/src/main.jsx"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('./sw-coop.js', { scope: './' });
+      }
+    </script>
   </body>
 </html>

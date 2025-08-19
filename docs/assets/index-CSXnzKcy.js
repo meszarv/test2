@@ -2242,7 +2242,7 @@ function useLiabilityManager({ assets, liabilities, liabilityTypes, setAssetsAnd
     cancelDeleteLiability
   };
 }
-const version = "1.0.49";
+const version = "1.0.50";
 const pkg = {
   version
 };
