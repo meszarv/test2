@@ -1994,19 +1994,10 @@ function usePortfolioFile({
       setError(e && e.message ? e.message : String(e));
     }
   }
-  async function handleOpenDrive() {
-    try {
-      const id = await openDriveFile(password);
-      if (!id) {
-        setError("Select or create a Google Drive file.");
-        return;
-      }
-      setDriveFileId(id);
-      setFileHandle(null);
-      setStep("password");
-    } catch (e) {
-      setError(e && e.message ? e.message : String(e));
-    }
+  function handleOpenDrive() {
+    setDriveFileId("");
+    setFileHandle(null);
+    setStep("password");
   }
   async function handleOpenSample() {
     setLoading(true);
@@ -2047,14 +2038,23 @@ function usePortfolioFile({
     }
   }
   async function handleLoad() {
-    if (!fileHandle && !driveFileId) return setError("Select a file first.");
+    if (!fileHandle && driveFileId === null) return setError("Select a file first.");
     if (!password) return setError("Enter a password first.");
     setLoading(true);
     setError(null);
     try {
       let data;
-      if (driveFileId) {
-        data = await readDrivePortfolioFile(driveFileId, password);
+      if (driveFileId !== null) {
+        let id = driveFileId;
+        if (!id) {
+          id = await openDriveFile(password);
+          if (!id) {
+            setError("Select or create a Google Drive file.");
+            return;
+          }
+          setDriveFileId(id);
+        }
+        data = await readDrivePortfolioFile(id, password);
       } else {
         const file = await fileHandle.getFile();
         const isEmpty = file.size === 0;
@@ -2253,7 +2253,7 @@ function useLiabilityManager({ assets, liabilities, liabilityTypes, setAssetsAnd
     cancelDeleteLiability
   };
 }
-const version = "1.0.52";
+const version = "1.0.53";
 const pkg = {
   version
 };
@@ -2275,7 +2275,7 @@ function App() {
   const driveClientId = "967365398072-sj6mjo1r3pdg18frmdl5aoafnvbbsfob.apps.googleusercontent.com";
   const driveReady2 = driveClientId;
   const builtAgo = reactExports.useMemo(() => {
-    const ts = "2025-08-19T16:40:16.681Z";
+    const ts = "2025-08-19T17:56:15.529Z";
     const diff = Date.now() - new Date(ts).getTime();
     const rtf = new Intl.RelativeTimeFormat(void 0, { numeric: "auto" });
     const seconds = Math.floor(diff / 1e3);
