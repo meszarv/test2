@@ -39,18 +39,26 @@ function ensureToken() {
 
 export async function openDriveFile() {
   if (!driveReady || !gapi?.client?.getToken || !tokenClient) return;
-  await ensureToken();
+  try {
+    await ensureToken();
+  } catch (err) {
+    throw new Error("Failed to authorize with Google Drive");
+  }
   const defaultName = localStorage.getItem(DRIVE_FILENAME_KEY) || "portfolio.enc";
   const name = prompt("Enter Google Drive filename", defaultName);
   if (!name) return;
   localStorage.setItem(DRIVE_FILENAME_KEY, name);
-  const res = await gapi.client.drive.files.list({
-    q: `name='${name.replace(/['\\]/g, "\\$&")}' and trashed=false`,
-    pageSize: 1,
-    fields: "files(id)",
-  });
-  const file = res?.result?.files?.[0];
-  return file?.id;
+  try {
+    const res = await gapi.client.drive.files.list({
+      q: `name='${name.replace(/['\\]/g, "\\$&")}' and trashed=false`,
+      pageSize: 1,
+      fields: "files(id)",
+    });
+    const file = res?.result?.files?.[0];
+    return file?.id;
+  } catch (err) {
+    throw new Error("Failed to search Google Drive for file");
+  }
 }
 
 export async function readDrivePortfolioFile(fileId, password) {
