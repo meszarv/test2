@@ -2319,7 +2319,7 @@ function useLiabilityManager({ assets, liabilities, liabilityTypes, setAssetsAnd
     cancelDeleteLiability
   };
 }
-const version = "1.0.54";
+const version = "1.0.55";
 const pkg = {
   version
 };
@@ -2338,11 +2338,11 @@ function App() {
   const [editLiability, setEditLiability] = reactExports.useState(null);
   const [showTarget, setShowTarget] = reactExports.useState(false);
   const [jsonOpen, setJsonOpen] = reactExports.useState(false);
-  const driveApiKey = "dummy";
-  const driveClientId = "dummy";
+  const driveApiKey = "AIzaSyD9IhFBHBHEs729edMO7LsoKZFlTfsnv5U";
+  const driveClientId = "967365398072-sj6mjo1r3pdg18frmdl5aoafnvbbsfob.apps.googleusercontent.com";
   const driveReady2 = driveClientId;
   const builtAgo = reactExports.useMemo(() => {
-    const ts = "2025-08-19T19:52:25.562Z";
+    const ts = "2025-08-19T20:06:01.373Z";
     const diff = Date.now() - new Date(ts).getTime();
     const rtf = new Intl.RelativeTimeFormat(void 0, { numeric: "auto" });
     const seconds = Math.floor(diff / 1e3);
@@ -2745,7 +2745,10 @@ function App() {
           setAllocation,
           assets,
           liabilities,
-          onEditJson: () => setJsonOpen(true)
+          onEditJson: () => {
+            setConfigOpen(false);
+            setJsonOpen(true);
+          }
         }
       )
     ] }) })

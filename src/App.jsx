@@ -434,7 +434,10 @@ export default function App() {
               setAllocation={setAllocation}
               assets={assets}
               liabilities={liabilities}
-              onEditJson={() => setJsonOpen(true)}
+              onEditJson={() => {
+                setConfigOpen(false);
+                setJsonOpen(true);
+              }}
             />
           </div>
         </div>
