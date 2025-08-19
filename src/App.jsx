@@ -15,7 +15,9 @@ import RebalancePlan from "./components/RebalancePlan.jsx";
 import ConfigPage from "./components/ConfigPage.jsx";
 import AddBtn from "./components/AddBtn.jsx";
 import ConfirmModal from "./components/ConfirmModal.jsx";
-import { formatCurrency } from "./utils.js";
+import JsonEditorModal from "./components/JsonEditorModal.jsx";
+import { formatCurrency, mkId, labelFor } from "./utils.js";
+import { DEFAULT_PORTFOLIO, upgradePortfolio } from "./file.js";
 import {
   defaultAssetTypes,
   defaultLiabilityTypes,
@@ -45,6 +47,7 @@ export default function App() {
   const [editAsset, setEditAsset] = useState(null);
   const [editLiability, setEditLiability] = useState(null);
   const [showTarget, setShowTarget] = useState(false);
+  const [jsonOpen, setJsonOpen] = useState(false);
   const driveApiKey = import.meta.env.VITE_GOOGLE_API_KEY;
   const driveClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
   const driveReady = driveApiKey && driveClientId;
@@ -141,6 +144,34 @@ export default function App() {
     setAssetsAndUpdateSnapshot,
     setEditLiability,
   });
+
+  function handleJsonSave(obj) {
+    const data = upgradePortfolio(obj);
+    const snaps = (data.snapshots || []).slice().sort((a, b) => new Date(a.asOf) - new Date(b.asOf));
+    setSnapshots(snaps);
+    const latest = snaps[snaps.length - 1];
+    const at = data.assetTypes || defaultAssetTypes;
+    const lt = data.liabilityTypes || defaultLiabilityTypes;
+    if (latest) {
+      setAssets((latest.assets || []).map((a) => ({ ...a, id: a.id || mkId(), name: a.name || labelFor(a.type, at) })));
+      setLiabilities(
+        (latest.liabilities || []).map((l) => ({
+          ...l,
+          id: l.id || mkId(),
+          name: l.name || labelFor(l.type, lt),
+          priority: !!l.priority,
+        }))
+      );
+      setCurrentIndex(snaps.length - 1);
+    } else {
+      setAssets([]);
+      setLiabilities([]);
+      setCurrentIndex(0);
+    }
+    setAllocation(data.allocation || {});
+    setAssetTypes(at);
+    setLiabilityTypes(lt);
+  }
 
   useEffect(() => {
     snapshotFromAssets(assets, liabilities);
@@ -378,6 +409,12 @@ export default function App() {
           onConfirm={confirmDeleteLiability}
           onCancel={cancelDeleteLiability}
         />
+        <JsonEditorModal
+          open={jsonOpen}
+          onClose={() => setJsonOpen(false)}
+          data={{ ...DEFAULT_PORTFOLIO, assetTypes, liabilityTypes, allocation, snapshots, liabilities }}
+          onSave={handleJsonSave}
+        />
         </>
       )}
 
@@ -397,6 +434,7 @@ export default function App() {
               setAllocation={setAllocation}
               assets={assets}
               liabilities={liabilities}
+              onEditJson={() => setJsonOpen(true)}
             />
           </div>
         </div>

@@ -1408,7 +1408,8 @@ function ConfigPage({
   allocation,
   setAllocation,
   assets,
-  liabilities
+  liabilities,
+  onEditJson
 }) {
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-6", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx(Section, { title: "Allocation", children: /* @__PURE__ */ jsxRuntimeExports.jsx(AllocationEditor, { allocation, setAllocation, assetTypes }) }),
@@ -1419,6 +1420,15 @@ function ConfigPage({
         liabilityTypes,
         setLiabilityTypes,
         liabilities
+      }
+    ) }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(Section, { title: "Data", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "button",
+      {
+        onClick: onEditJson,
+        className: "h-8 px-3 rounded-lg bg-zinc-800 border border-zinc-700 hover:bg-zinc-700",
+        title: "Edit JSON",
+        children: "Edit JSON"
       }
     ) })
   ] });
@@ -1433,6 +1443,62 @@ function AddBtn({ onClick, title, className = "" }) {
       children: "+"
     }
   );
+}
+function JsonEditorModal({ open, onClose, data, onSave }) {
+  const [text, setText] = reactExports.useState("");
+  reactExports.useEffect(() => {
+    if (open) {
+      setText(JSON.stringify(data, null, 2));
+    }
+  }, [open, data]);
+  let valid = true;
+  try {
+    JSON.parse(text);
+  } catch {
+    valid = false;
+  }
+  function handleSave() {
+    if (!valid) return;
+    const parsed = JSON.parse(text);
+    onSave(parsed);
+    onClose();
+  }
+  if (!open) return null;
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "fixed inset-0 bg-black/50 flex items-center justify-center p-4", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-zinc-900 rounded-xl p-4 w-full max-w-3xl space-y-3", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "text-lg font-medium", children: "Edit JSON" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "textarea",
+      {
+        className: "w-full h-64 rounded-lg bg-zinc-900 border border-zinc-800 px-3 py-2 text-zinc-100 font-mono text-sm",
+        value: text,
+        onChange: (e) => setText(e.target.value)
+      }
+    ),
+    !valid && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-red-500 text-sm", children: "Invalid JSON" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-end gap-2 pt-2", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "button",
+        {
+          type: "button",
+          onClick: onClose,
+          title: "Close",
+          className: "px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 hover:bg-zinc-700",
+          children: "✖"
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "button",
+        {
+          type: "button",
+          onClick: handleSave,
+          title: "Save",
+          disabled: !valid,
+          className: `px-3 py-2 rounded-lg ${valid ? "bg-blue-600 hover:bg-blue-500" : "bg-zinc-700 text-zinc-400 cursor-not-allowed"}`,
+          children: "💾"
+        }
+      )
+    ] })
+  ] }) });
 }
 const defaultAssetTypes = {
   cash: { name: "Cash" },
@@ -1562,91 +1628,6 @@ function buildSeries(snaps, period) {
   });
   const grouped = groupByPeriod(pts, period);
   return grouped.map(({ lastDate, ...rest }) => rest);
-}
-function useSnapshots({ assets, setAssets, liabilities, setLiabilities, assetTypes, liabilityTypes }) {
-  const [snapshots, setSnapshots] = reactExports.useState([]);
-  const [currentIndex, setCurrentIndex] = reactExports.useState(0);
-  function snapshotFromAssets(nextAssets = assets, nextLiabilities = liabilities, date = /* @__PURE__ */ new Date()) {
-    setSnapshots((prev) => {
-      const iso = date.toISOString();
-      const month = iso.slice(0, 7);
-      const snap = {
-        asOf: iso,
-        assets: (nextAssets || []).map((a) => ({ ...a })),
-        liabilities: (nextLiabilities || []).map((l) => ({ ...l }))
-      };
-      const existing = prev.findIndex((p) => p.asOf.slice(0, 7) === month);
-      let s;
-      if (existing >= 0) {
-        s = prev.map((p, i) => i === existing ? snap : p);
-        setCurrentIndex(existing);
-      } else {
-        s = [...prev, snap].sort((a, b) => new Date(a.asOf) - new Date(b.asOf));
-        setCurrentIndex(s.indexOf(snap));
-      }
-      return s;
-    });
-  }
-  function setAssetsAndUpdateSnapshot(nextAssets, nextLiabilities = liabilities) {
-    setAssets(nextAssets);
-    setLiabilities(nextLiabilities);
-    setSnapshots(
-      (prev) => prev.map(
-        (s, i) => i === currentIndex ? {
-          ...s,
-          assets: (nextAssets || []).map((a) => ({ ...a })),
-          liabilities: (nextLiabilities || []).map((l) => ({ ...l }))
-        } : s
-      )
-    );
-  }
-  function handleSelectSnapshot(i) {
-    const snap = snapshots[i];
-    if (!snap) return;
-    setCurrentIndex(i);
-    setAssets((snap.assets || []).map((a) => ({ ...a, name: a.name || labelFor(a.type, assetTypes) })));
-    setLiabilities(
-      (snap.liabilities || []).map((l) => ({
-        ...l,
-        name: l.name || labelFor(l.type, liabilityTypes),
-        priority: !!l.priority
-      }))
-    );
-  }
-  function handleAddSnapshot() {
-    snapshotFromAssets(assets, liabilities);
-  }
-  function handleChangeSnapshotDate(i, date) {
-    setSnapshots((prev) => {
-      const iso = date.toISOString();
-      const month = iso.slice(0, 7);
-      if (prev.some((s, idx) => idx !== i && s.asOf.slice(0, 7) === month)) {
-        return prev;
-      }
-      const next = prev.map((s, idx) => idx === i ? { ...s, asOf: iso } : s).sort((a, b) => new Date(a.asOf) - new Date(b.asOf));
-      setCurrentIndex(next.findIndex((s) => s.asOf === iso));
-      return next;
-    });
-  }
-  function handleDeleteSnapshot(i) {
-    setSnapshots((prev) => {
-      const next = prev.filter((_, idx) => idx !== i);
-      setCurrentIndex(Math.max(0, i - 1));
-      return next;
-    });
-  }
-  return {
-    snapshots,
-    setSnapshots,
-    currentIndex,
-    setCurrentIndex,
-    snapshotFromAssets,
-    setAssetsAndUpdateSnapshot,
-    handleSelectSnapshot,
-    handleAddSnapshot,
-    handleChangeSnapshotDate,
-    handleDeleteSnapshot
-  };
 }
 const DB_NAME = "portfolio-tracker-db";
 const STORE = "handles";
@@ -1810,6 +1791,91 @@ async function writePortfolioFile(handle, password, data) {
   const writable = await handle.createWritable();
   await writable.write(payload);
   await writable.close();
+}
+function useSnapshots({ assets, setAssets, liabilities, setLiabilities, assetTypes, liabilityTypes }) {
+  const [snapshots, setSnapshots] = reactExports.useState([]);
+  const [currentIndex, setCurrentIndex] = reactExports.useState(0);
+  function snapshotFromAssets(nextAssets = assets, nextLiabilities = liabilities, date = /* @__PURE__ */ new Date()) {
+    setSnapshots((prev) => {
+      const iso = date.toISOString();
+      const month = iso.slice(0, 7);
+      const snap = {
+        asOf: iso,
+        assets: (nextAssets || []).map((a) => ({ ...a })),
+        liabilities: (nextLiabilities || []).map((l) => ({ ...l }))
+      };
+      const existing = prev.findIndex((p) => p.asOf.slice(0, 7) === month);
+      let s;
+      if (existing >= 0) {
+        s = prev.map((p, i) => i === existing ? snap : p);
+        setCurrentIndex(existing);
+      } else {
+        s = [...prev, snap].sort((a, b) => new Date(a.asOf) - new Date(b.asOf));
+        setCurrentIndex(s.indexOf(snap));
+      }
+      return s;
+    });
+  }
+  function setAssetsAndUpdateSnapshot(nextAssets, nextLiabilities = liabilities) {
+    setAssets(nextAssets);
+    setLiabilities(nextLiabilities);
+    setSnapshots(
+      (prev) => prev.map(
+        (s, i) => i === currentIndex ? {
+          ...s,
+          assets: (nextAssets || []).map((a) => ({ ...a })),
+          liabilities: (nextLiabilities || []).map((l) => ({ ...l }))
+        } : s
+      )
+    );
+  }
+  function handleSelectSnapshot(i) {
+    const snap = snapshots[i];
+    if (!snap) return;
+    setCurrentIndex(i);
+    setAssets((snap.assets || []).map((a) => ({ ...a, name: a.name || labelFor(a.type, assetTypes) })));
+    setLiabilities(
+      (snap.liabilities || []).map((l) => ({
+        ...l,
+        name: l.name || labelFor(l.type, liabilityTypes),
+        priority: !!l.priority
+      }))
+    );
+  }
+  function handleAddSnapshot() {
+    snapshotFromAssets(assets, liabilities);
+  }
+  function handleChangeSnapshotDate(i, date) {
+    setSnapshots((prev) => {
+      const iso = date.toISOString();
+      const month = iso.slice(0, 7);
+      if (prev.some((s, idx) => idx !== i && s.asOf.slice(0, 7) === month)) {
+        return prev;
+      }
+      const next = prev.map((s, idx) => idx === i ? { ...s, asOf: iso } : s).sort((a, b) => new Date(a.asOf) - new Date(b.asOf));
+      setCurrentIndex(next.findIndex((s) => s.asOf === iso));
+      return next;
+    });
+  }
+  function handleDeleteSnapshot(i) {
+    setSnapshots((prev) => {
+      const next = prev.filter((_, idx) => idx !== i);
+      setCurrentIndex(Math.max(0, i - 1));
+      return next;
+    });
+  }
+  return {
+    snapshots,
+    setSnapshots,
+    currentIndex,
+    setCurrentIndex,
+    snapshotFromAssets,
+    setAssetsAndUpdateSnapshot,
+    handleSelectSnapshot,
+    handleAddSnapshot,
+    handleChangeSnapshotDate,
+    handleDeleteSnapshot
+  };
 }
 let tokenClient;
 let driveReady = false;
@@ -2253,7 +2319,7 @@ function useLiabilityManager({ assets, liabilities, liabilityTypes, setAssetsAnd
     cancelDeleteLiability
   };
 }
-const version = "1.0.53";
+const version = "1.0.54";
 const pkg = {
   version
 };
@@ -2271,11 +2337,12 @@ function App() {
   const [editAsset, setEditAsset] = reactExports.useState(null);
   const [editLiability, setEditLiability] = reactExports.useState(null);
   const [showTarget, setShowTarget] = reactExports.useState(false);
-  const driveApiKey = "AIzaSyD9IhFBHBHEs729edMO7LsoKZFlTfsnv5U";
-  const driveClientId = "967365398072-sj6mjo1r3pdg18frmdl5aoafnvbbsfob.apps.googleusercontent.com";
+  const [jsonOpen, setJsonOpen] = reactExports.useState(false);
+  const driveApiKey = "dummy";
+  const driveClientId = "dummy";
   const driveReady2 = driveClientId;
   const builtAgo = reactExports.useMemo(() => {
-    const ts = "2025-08-19T17:56:15.529Z";
+    const ts = "2025-08-19T19:52:25.562Z";
     const diff = Date.now() - new Date(ts).getTime();
     const rtf = new Intl.RelativeTimeFormat(void 0, { numeric: "auto" });
     const seconds = Math.floor(diff / 1e3);
@@ -2359,6 +2426,33 @@ function App() {
     setAssetsAndUpdateSnapshot,
     setEditLiability
   });
+  function handleJsonSave(obj) {
+    const data = upgradePortfolio(obj);
+    const snaps = (data.snapshots || []).slice().sort((a, b) => new Date(a.asOf) - new Date(b.asOf));
+    setSnapshots(snaps);
+    const latest = snaps[snaps.length - 1];
+    const at = data.assetTypes || defaultAssetTypes;
+    const lt = data.liabilityTypes || defaultLiabilityTypes;
+    if (latest) {
+      setAssets((latest.assets || []).map((a) => ({ ...a, id: a.id || mkId(), name: a.name || labelFor(a.type, at) })));
+      setLiabilities(
+        (latest.liabilities || []).map((l) => ({
+          ...l,
+          id: l.id || mkId(),
+          name: l.name || labelFor(l.type, lt),
+          priority: !!l.priority
+        }))
+      );
+      setCurrentIndex(snaps.length - 1);
+    } else {
+      setAssets([]);
+      setLiabilities([]);
+      setCurrentIndex(0);
+    }
+    setAllocation(data.allocation || {});
+    setAssetTypes(at);
+    setLiabilityTypes(lt);
+  }
   reactExports.useEffect(() => {
     snapshotFromAssets(assets, liabilities);
   }, []);
@@ -2624,6 +2718,15 @@ function App() {
           onConfirm: confirmDeleteLiability,
           onCancel: cancelDeleteLiability
         }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        JsonEditorModal,
+        {
+          open: jsonOpen,
+          onClose: () => setJsonOpen(false),
+          data: { ...DEFAULT_PORTFOLIO, assetTypes, liabilityTypes, allocation, snapshots, liabilities },
+          onSave: handleJsonSave
+        }
       )
     ] }),
     configOpen && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "fixed inset-0 bg-black/50 flex items-center justify-center p-6", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-zinc-900 rounded-xl p-6 max-w-3xl w-full max-h-full overflow-y-auto space-y-4", children: [
@@ -2641,7 +2744,8 @@ function App() {
           allocation,
           setAllocation,
           assets,
-          liabilities
+          liabilities,
+          onEditJson: () => setJsonOpen(true)
         }
       )
     ] }) })
