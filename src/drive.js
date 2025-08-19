@@ -52,7 +52,8 @@ function ensureToken() {
   }
   return new Promise((resolve) => {
     tokenClient.callback = () => resolve();
-    tokenClient.requestAccessToken();
+    // Use an empty prompt to avoid forcing a popup and ensure redirect mode
+    tokenClient.requestAccessToken({ prompt: "" });
   });
 }
 

@@ -1860,7 +1860,7 @@ function ensureToken() {
   }
   return new Promise((resolve) => {
     tokenClient.callback = () => resolve();
-    tokenClient.requestAccessToken();
+    tokenClient.requestAccessToken({ prompt: "" });
   });
 }
 async function openDriveFile() {
@@ -2242,7 +2242,7 @@ function useLiabilityManager({ assets, liabilities, liabilityTypes, setAssetsAnd
     cancelDeleteLiability
   };
 }
-const version = "1.0.48";
+const version = "1.0.49";
 const pkg = {
   version
 };

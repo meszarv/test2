@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { initDrive, openDriveFile } from './drive.js';
+import { initDrive, openDriveFile, readDrivePortfolioFile } from './drive.js';
 
 test('initDrive initializes gapi client and token client', async () => {
   let initArgs;
@@ -113,6 +113,54 @@ test('openDriveFile returns undefined if gapi client uninitialized', async () =>
   global.gapi = {};
   const result = await openDriveFile();
   assert.equal(result, undefined);
+});
+
+test('ensureToken requests access token with redirect prompt', async () => {
+  let requestOpts;
+  let token = {};
+  global.window = {
+    location: {
+      origin: 'https://example.com',
+      href: 'https://example.com/',
+      hash: '',
+      search: '',
+      pathname: '/',
+    },
+    history: { replaceState: () => {} },
+  };
+  global.gapi = {
+    load: (name, cb) => cb(),
+    client: {
+      init: async () => {},
+      getToken: () => token,
+    },
+  };
+  let tokenClient;
+  global.google = {
+    accounts: {
+      oauth2: {
+        initTokenClient: () => {
+          tokenClient = {
+            callback: () => {},
+            requestAccessToken: (opts) => {
+              requestOpts = opts;
+              token = { access_token: 'token' };
+              tokenClient.callback();
+            },
+          };
+          return tokenClient;
+        },
+      },
+    },
+  };
+  global.fetch = async () => ({ arrayBuffer: async () => new ArrayBuffer(0) });
+  await initDrive({ apiKey: 'key', clientId: 'id' });
+  await readDrivePortfolioFile('1', 'pw');
+  assert.deepEqual(requestOpts, { prompt: '' });
+  delete global.fetch;
+  delete global.window;
+  delete global.gapi;
+  delete global.google;
 });
 
 test('initDrive handles discovery failure', async () => {
