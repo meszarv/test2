@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { initDrive, openDriveFile, readDrivePortfolioFile } from './drive.js';
+import { DEFAULT_PORTFOLIO } from './file.js';
 
 test('initDrive initializes gapi client and token client', async () => {
   let initArgs;
@@ -209,6 +210,64 @@ test('openDriveFile returns undefined when creation cancelled', async () => {
   const id = await openDriveFile('pw');
   assert.equal(id, undefined);
   assert.equal(fetchCalled, false);
+  delete global.fetch;
+  delete global.confirm;
+  delete global.prompt;
+  delete global.localStorage;
+  delete global.window;
+  delete global.google;
+});
+
+test('new Drive file can be read back without decryption error', async () => {
+  let uploaded;
+  global.window = {
+    location: {
+      origin: 'https://example.com',
+      href: 'https://example.com/',
+      hash: '',
+      search: '',
+      pathname: '/',
+    },
+    history: { replaceState: () => {} },
+  };
+  global.localStorage = {
+    store: {},
+    getItem(key) {
+      return this.store[key];
+    },
+    setItem(key, val) {
+      this.store[key] = val;
+    },
+  };
+  global.prompt = () => 'new.enc';
+  global.confirm = () => true;
+  global.gapi = {
+    load: (name, cb) => cb(),
+    client: {
+      init: async () => {},
+      getToken: () => ({ access_token: 'token' }),
+      drive: {
+        files: {
+          list: async () => ({ result: { files: [] } }),
+        },
+      },
+    },
+  };
+  global.google = {
+    accounts: { oauth2: { initTokenClient: () => ({ requestAccessToken() {} }) } },
+  };
+  global.fetch = async (url, opts) => {
+    if (url.startsWith('https://www.googleapis.com/upload/drive/v3/files')) {
+      uploaded = opts.body.get('file');
+      return { json: async () => ({ id: '999' }) };
+    }
+    return { arrayBuffer: async () => await uploaded.arrayBuffer() };
+  };
+  await initDrive({ apiKey: 'key', clientId: 'id' });
+  const id = await openDriveFile('pw');
+  const data = await readDrivePortfolioFile(id, 'pw');
+  assert.equal(id, '999');
+  assert.deepEqual(data, DEFAULT_PORTFOLIO);
   delete global.fetch;
   delete global.confirm;
   delete global.prompt;

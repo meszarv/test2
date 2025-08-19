@@ -84,19 +84,10 @@ export default function usePortfolioFile({
     }
   }
 
-  async function handleOpenDrive() {
-    try {
-      const id = await openDriveFile(password);
-      if (!id) {
-        setError("Select or create a Google Drive file.");
-        return;
-      }
-      setDriveFileId(id);
-      setFileHandle(null);
-      setStep("password");
-    } catch (e) {
-      setError(e && e.message ? e.message : String(e));
-    }
+  function handleOpenDrive() {
+    setDriveFileId("");
+    setFileHandle(null);
+    setStep("password");
   }
 
   async function handleOpenSample() {
@@ -139,14 +130,23 @@ export default function usePortfolioFile({
   }
 
   async function handleLoad() {
-    if (!fileHandle && !driveFileId) return setError("Select a file first.");
+    if (!fileHandle && driveFileId === null) return setError("Select a file first.");
     if (!password) return setError("Enter a password first.");
     setLoading(true);
     setError(null);
     try {
       let data;
-      if (driveFileId) {
-        data = await readDrivePortfolioFile(driveFileId, password);
+      if (driveFileId !== null) {
+        let id = driveFileId;
+        if (!id) {
+          id = await openDriveFile(password);
+          if (!id) {
+            setError("Select or create a Google Drive file.");
+            return;
+          }
+          setDriveFileId(id);
+        }
+        data = await readDrivePortfolioFile(id, password);
       } else {
         const file = await fileHandle.getFile();
         const isEmpty = file.size === 0;
