@@ -87,6 +87,10 @@ export default function usePortfolioFile({
   async function handleOpenDrive() {
     try {
       const id = await openDriveFile();
+      if (!id) {
+        setError("Select a Google Drive file.");
+        return;
+      }
       setDriveFileId(id);
       setFileHandle(null);
       setStep("password");
@@ -135,7 +139,8 @@ export default function usePortfolioFile({
   }
 
   async function handleLoad() {
-    if ((!fileHandle && !driveFileId) || !password) return setError("Pick a file and enter password first.");
+    if (!fileHandle && !driveFileId) return setError("Select a file first.");
+    if (!password) return setError("Enter a password first.");
     setLoading(true);
     setError(null);
     try {
@@ -206,7 +211,8 @@ export default function usePortfolioFile({
   }
 
   async function handleSave() {
-    if ((!fileHandle && !driveFileId) || !password) return setError("Pick a file and enter password first.");
+    if (!fileHandle && !driveFileId) return setError("Select a file first.");
+    if (!password) return setError("Enter a password first.");
     await withLoading(async () => {
       const data = buildPortfolioData();
       if (driveFileId) {

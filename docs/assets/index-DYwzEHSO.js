@@ -1846,18 +1846,26 @@ function ensureToken() {
 }
 async function openDriveFile() {
   if (!driveReady || !gapi?.client?.getToken || !tokenClient) return;
-  await ensureToken();
+  try {
+    await ensureToken();
+  } catch (err) {
+    throw new Error("Failed to authorize with Google Drive");
+  }
   const defaultName = localStorage.getItem(DRIVE_FILENAME_KEY) || "portfolio.enc";
   const name = prompt("Enter Google Drive filename", defaultName);
   if (!name) return;
   localStorage.setItem(DRIVE_FILENAME_KEY, name);
-  const res = await gapi.client.drive.files.list({
-    q: `name='${name.replace(/['\\]/g, "\\$&")}' and trashed=false`,
-    pageSize: 1,
-    fields: "files(id)"
-  });
-  const file = res?.result?.files?.[0];
-  return file?.id;
+  try {
+    const res = await gapi.client.drive.files.list({
+      q: `name='${name.replace(/['\\]/g, "\\$&")}' and trashed=false`,
+      pageSize: 1,
+      fields: "files(id)"
+    });
+    const file = res?.result?.files?.[0];
+    return file?.id;
+  } catch (err) {
+    throw new Error("Failed to search Google Drive for file");
+  }
 }
 async function readDrivePortfolioFile(fileId, password) {
   if (!driveReady || !tokenClient) return;
@@ -1959,6 +1967,10 @@ function usePortfolioFile({
   async function handleOpenDrive() {
     try {
       const id = await openDriveFile();
+      if (!id) {
+        setError("Select a Google Drive file.");
+        return;
+      }
       setDriveFileId(id);
       setFileHandle(null);
       setStep("password");
@@ -2005,7 +2017,8 @@ function usePortfolioFile({
     }
   }
   async function handleLoad() {
-    if (!fileHandle && !driveFileId || !password) return setError("Pick a file and enter password first.");
+    if (!fileHandle && !driveFileId) return setError("Select a file first.");
+    if (!password) return setError("Enter a password first.");
     setLoading(true);
     setError(null);
     try {
@@ -2073,7 +2086,8 @@ function usePortfolioFile({
     }
   }
   async function handleSave() {
-    if (!fileHandle && !driveFileId || !password) return setError("Pick a file and enter password first.");
+    if (!fileHandle && !driveFileId) return setError("Select a file first.");
+    if (!password) return setError("Enter a password first.");
     await withLoading(async () => {
       const data = buildPortfolioData();
       if (driveFileId) {
@@ -2209,7 +2223,7 @@ function useLiabilityManager({ assets, liabilities, liabilityTypes, setAssetsAnd
     cancelDeleteLiability
   };
 }
-const version = "1.0.46";
+const version = "1.0.47";
 const pkg = {
   version
 };
