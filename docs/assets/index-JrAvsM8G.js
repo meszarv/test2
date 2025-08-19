@@ -1226,7 +1226,7 @@ function getSortValue(category, key, data) {
   const totalPriorityDebt = (priorityDebt || 0) + (priorityPayoff || 0);
   switch (key) {
     case "current":
-      return category === "priority_debt" ? -totalPriorityDebt : byCat[category] || 0;
+      return category === "priority_debt" ? -totalPriorityDebt : category === "cash" ? data.cashCurrent || 0 : byCat[category] || 0;
     case "after":
       return category === "priority_debt" ? priorityDebt ? -priorityDebt : 0 : (byCat[category] || 0) + (investPlan[category] || 0);
     case "ideal":
@@ -1306,7 +1306,7 @@ function RebalancePlan({ data, assetTypes }) {
         /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "py-1", children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "inline-block w-3 h-3 rounded-sm", style: { backgroundColor: colorMap[c] } }) }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "py-1 text-zinc-200", children: c === "priority_debt" ? "Priority debt" : labelFor(c, assetTypes) }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "py-1 text-right text-zinc-300", children: formatCurrency(
-          c === "priority_debt" ? -totalPriorityDebt : data.byCat[c] || 0
+          c === "priority_debt" ? -totalPriorityDebt : c === "cash" ? data.cashCurrent || 0 : data.byCat[c] || 0
         ) }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "py-1 text-right text-zinc-300", children: formatCurrency(c === "priority_debt" ? 0 : data.idealByCat[c] || 0) }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "py-1 text-right font-medium text-zinc-100", children: formatCurrency(
@@ -1555,6 +1555,9 @@ function rebalance(assets, liabilities, allocPct) {
     cashAvailable -= payoff;
   }
   const priorityPayoff = initialCash - cashAvailable;
+  const priorityDebt = adjLiabilities.filter((l) => l.priority).reduce((sum, l) => sum + (Number(l.value) || 0), 0);
+  const nonPriorityLiabilities = adjLiabilities.filter((l) => !l.priority);
+  const byCatPrePayoff = currentByCategory(adjAssets, nonPriorityLiabilities);
   let toDeduct = priorityPayoff;
   for (const a of adjAssets) {
     if (a.type !== "cash" || toDeduct <= 0) continue;
@@ -1563,8 +1566,6 @@ function rebalance(assets, liabilities, allocPct) {
     a.value = avail - used;
     toDeduct -= used;
   }
-  const priorityDebt = adjLiabilities.filter((l) => l.priority).reduce((sum, l) => sum + (Number(l.value) || 0), 0);
-  const nonPriorityLiabilities = adjLiabilities.filter((l) => !l.priority);
   const totalNow = netWorth(adjAssets, adjLiabilities);
   const byCat = currentByCategory(adjAssets, nonPriorityLiabilities);
   const totalByCat = Object.values(byCat).reduce((a, b) => a + b, 0);
@@ -1602,7 +1603,8 @@ function rebalance(assets, liabilities, allocPct) {
     idealByCat,
     investPlan,
     priorityDebt,
-    priorityPayoff
+    priorityPayoff,
+    cashCurrent: byCatPrePayoff.cash || 0
   };
 }
 function groupByPeriod(points, mode) {
@@ -2319,7 +2321,7 @@ function useLiabilityManager({ assets, liabilities, liabilityTypes, setAssetsAnd
     cancelDeleteLiability
   };
 }
-const version = "1.0.55";
+const version = "1.0.56";
 const pkg = {
   version
 };
@@ -2342,7 +2344,7 @@ function App() {
   const driveClientId = "967365398072-sj6mjo1r3pdg18frmdl5aoafnvbbsfob.apps.googleusercontent.com";
   const driveReady2 = driveClientId;
   const builtAgo = reactExports.useMemo(() => {
-    const ts = "2025-08-19T20:06:01.373Z";
+    const ts = "2025-08-19T21:09:34.536Z";
     const diff = Date.now() - new Date(ts).getTime();
     const rtf = new Intl.RelativeTimeFormat(void 0, { numeric: "auto" });
     const seconds = Math.floor(diff / 1e3);

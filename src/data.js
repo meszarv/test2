@@ -64,6 +64,12 @@ export function rebalance(assets, liabilities, allocPct) {
   }
 
   const priorityPayoff = initialCash - cashAvailable;
+  const priorityDebt = adjLiabilities
+    .filter((l) => l.priority)
+    .reduce((sum, l) => sum + (Number(l.value) || 0), 0);
+  const nonPriorityLiabilities = adjLiabilities.filter((l) => !l.priority);
+  const byCatPrePayoff = currentByCategory(adjAssets, nonPriorityLiabilities);
+
   let toDeduct = priorityPayoff;
   for (const a of adjAssets) {
     if (a.type !== "cash" || toDeduct <= 0) continue;
@@ -72,11 +78,6 @@ export function rebalance(assets, liabilities, allocPct) {
     a.value = avail - used;
     toDeduct -= used;
   }
-
-  const priorityDebt = adjLiabilities
-    .filter((l) => l.priority)
-    .reduce((sum, l) => sum + (Number(l.value) || 0), 0);
-  const nonPriorityLiabilities = adjLiabilities.filter((l) => !l.priority);
 
   const totalNow = netWorth(adjAssets, adjLiabilities);
   const byCat = currentByCategory(adjAssets, nonPriorityLiabilities);
@@ -119,6 +120,7 @@ export function rebalance(assets, liabilities, allocPct) {
     investPlan,
     priorityDebt,
     priorityPayoff,
+    cashCurrent: byCatPrePayoff.cash || 0,
   };
 }
 

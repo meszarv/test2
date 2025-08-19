@@ -13,7 +13,11 @@ function getSortValue(category, key, data) {
   const totalPriorityDebt = (priorityDebt || 0) + (priorityPayoff || 0);
   switch (key) {
     case "current":
-      return category === "priority_debt" ? -totalPriorityDebt : byCat[category] || 0;
+      return category === "priority_debt"
+        ? -totalPriorityDebt
+        : category === "cash"
+        ? data.cashCurrent || 0
+        : byCat[category] || 0;
     case "after":
       return category === "priority_debt"
         ? priorityDebt
@@ -102,6 +106,8 @@ export default function RebalancePlan({ data, assetTypes }) {
                   formatCurrency(
                     c === "priority_debt"
                       ? -totalPriorityDebt
+                      : c === "cash"
+                      ? data.cashCurrent || 0
                       : data.byCat[c] || 0
                   )
                 }
