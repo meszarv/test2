@@ -99,7 +99,7 @@ test('openDriveFile prompts for filename and searches drive', async () => {
     },
   };
   await initDrive({ apiKey: 'key', clientId: 'id' });
-  const id = await openDriveFile();
+  const id = await openDriveFile('pw');
   assert.equal(id, '123');
   assert.ok(listArgs.q.includes("name='test.enc'"));
   assert.equal(localStorage.getItem('driveFilename'), 'test.enc');
@@ -109,9 +109,117 @@ test('openDriveFile prompts for filename and searches drive', async () => {
   delete global.window;
 });
 
+test('openDriveFile creates new file when not found and confirmed', async () => {
+  let fetchCalled = false;
+  global.window = {
+    location: {
+      origin: 'https://example.com',
+      href: 'https://example.com/',
+      hash: '',
+      search: '',
+      pathname: '/',
+    },
+    history: { replaceState: () => {} },
+  };
+  global.localStorage = {
+    store: {},
+    getItem(key) {
+      return this.store[key];
+    },
+    setItem(key, val) {
+      this.store[key] = val;
+    },
+  };
+  global.prompt = () => 'new.enc';
+  global.confirm = () => true;
+  global.gapi = {
+    load: (name, cb) => cb(),
+    client: {
+      init: async () => {},
+      getToken: () => ({ access_token: 'token' }),
+      drive: {
+        files: {
+          list: async () => ({ result: { files: [] } }),
+        },
+      },
+    },
+  };
+  global.google = {
+    accounts: { oauth2: { initTokenClient: () => ({ requestAccessToken() {} }) } },
+  };
+  global.fetch = async () => {
+    fetchCalled = true;
+    return { json: async () => ({ id: '999' }) };
+  };
+  await initDrive({ apiKey: 'key', clientId: 'id' });
+  const id = await openDriveFile('pw');
+  assert.equal(id, '999');
+  assert.equal(fetchCalled, true);
+  delete global.fetch;
+  delete global.confirm;
+  delete global.prompt;
+  delete global.localStorage;
+  delete global.window;
+  delete global.google;
+});
+
+test('openDriveFile returns undefined when creation cancelled', async () => {
+  let fetchCalled = false;
+  global.window = {
+    location: {
+      origin: 'https://example.com',
+      href: 'https://example.com/',
+      hash: '',
+      search: '',
+      pathname: '/',
+    },
+    history: { replaceState: () => {} },
+  };
+  global.localStorage = {
+    store: {},
+    getItem(key) {
+      return this.store[key];
+    },
+    setItem(key, val) {
+      this.store[key] = val;
+    },
+  };
+  global.prompt = () => 'new.enc';
+  global.confirm = () => false;
+  global.gapi = {
+    load: (name, cb) => cb(),
+    client: {
+      init: async () => {},
+      getToken: () => ({ access_token: 'token' }),
+      drive: {
+        files: {
+          list: async () => ({ result: { files: [] } }),
+        },
+      },
+    },
+  };
+  global.google = {
+    accounts: { oauth2: { initTokenClient: () => ({ requestAccessToken() {} }) } },
+  };
+  global.fetch = async () => {
+    fetchCalled = true;
+    return { json: async () => ({ id: '999' }) };
+  };
+  await initDrive({ apiKey: 'key', clientId: 'id' });
+  const id = await openDriveFile('pw');
+  assert.equal(id, undefined);
+  assert.equal(fetchCalled, false);
+  delete global.fetch;
+  delete global.confirm;
+  delete global.prompt;
+  delete global.localStorage;
+  delete global.window;
+  delete global.google;
+});
+
 test('openDriveFile returns undefined if gapi client uninitialized', async () => {
   global.gapi = {};
-  const result = await openDriveFile();
+  const result = await openDriveFile('pw');
   assert.equal(result, undefined);
 });
 
@@ -199,7 +307,7 @@ test('initDrive handles discovery failure', async () => {
     errorMessage = msg;
   };
   await initDrive({ apiKey: 'key', clientId: 'id' });
-  const result = await openDriveFile();
+  const result = await openDriveFile('pw');
   assert.equal(result, undefined);
   assert.equal(tokenInitCalled, false);
   assert.ok(String(errorMessage).includes('Failed to initialize Google Drive'));

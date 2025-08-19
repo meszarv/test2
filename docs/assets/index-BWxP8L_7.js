@@ -1863,7 +1863,7 @@ function ensureToken() {
     tokenClient.requestAccessToken({ prompt: "" });
   });
 }
-async function openDriveFile() {
+async function openDriveFile(password) {
   if (!driveReady || !gapi?.client?.getToken || !tokenClient) return;
   try {
     await ensureToken();
@@ -1880,8 +1880,19 @@ async function openDriveFile() {
       pageSize: 1,
       fields: "files(id)"
     });
-    const file = res?.result?.files?.[0];
-    return file?.id;
+    const files = res?.result?.files || [];
+    if (files.length === 0) {
+      if (confirm("File not found. Create it?")) {
+        try {
+          const id = await writeDrivePortfolioFile(void 0, password, DEFAULT_PORTFOLIO);
+          return id;
+        } catch (err) {
+          throw new Error("Failed to create Google Drive file");
+        }
+      }
+      return;
+    }
+    return files[0].id;
   } catch (err) {
     throw new Error("Failed to search Google Drive for file");
   }
@@ -1985,9 +1996,9 @@ function usePortfolioFile({
   }
   async function handleOpenDrive() {
     try {
-      const id = await openDriveFile();
+      const id = await openDriveFile(password);
       if (!id) {
-        setError("Select a Google Drive file.");
+        setError("Select or create a Google Drive file.");
         return;
       }
       setDriveFileId(id);
@@ -2242,7 +2253,7 @@ function useLiabilityManager({ assets, liabilities, liabilityTypes, setAssetsAnd
     cancelDeleteLiability
   };
 }
-const version = "1.0.50";
+const version = "1.0.51";
 const pkg = {
   version
 };

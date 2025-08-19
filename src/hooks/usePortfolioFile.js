@@ -86,9 +86,9 @@ export default function usePortfolioFile({
 
   async function handleOpenDrive() {
     try {
-      const id = await openDriveFile();
+      const id = await openDriveFile(password);
       if (!id) {
-        setError("Select a Google Drive file.");
+        setError("Select or create a Google Drive file.");
         return;
       }
       setDriveFileId(id);

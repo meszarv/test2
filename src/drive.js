@@ -57,7 +57,7 @@ function ensureToken() {
   });
 }
 
-export async function openDriveFile() {
+export async function openDriveFile(password) {
   if (!driveReady || !gapi?.client?.getToken || !tokenClient) return;
   try {
     await ensureToken();
@@ -74,8 +74,19 @@ export async function openDriveFile() {
       pageSize: 1,
       fields: "files(id)",
     });
-    const file = res?.result?.files?.[0];
-    return file?.id;
+    const files = res?.result?.files || [];
+    if (files.length === 0) {
+      if (confirm("File not found. Create it?")) {
+        try {
+          const id = await writeDrivePortfolioFile(undefined, password, DEFAULT_PORTFOLIO);
+          return id;
+        } catch (err) {
+          throw new Error("Failed to create Google Drive file");
+        }
+      }
+      return;
+    }
+    return files[0].id;
   } catch (err) {
     throw new Error("Failed to search Google Drive for file");
   }
