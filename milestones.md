@@ -1,71 +1,99 @@
-# Nested Portfolio Views — Implementation Plan
+# Structured Settings Workspace — Implementation Plan
 
-This plan implements the portfolio-scope additions in [SPEC.md](./SPEC.md). All items are pending. The existing version 6 model is the migration source; the completed version 6 work is not repeated here.
+This plan replaces the current long configuration modal with a focused settings workspace. It reorganizes existing functionality without changing investment calculations or introducing a new portfolio file format.
 
-## Milestone 1 — Version 7 data model and migration
+Implementation is complete except for the credentialed production build and its regenerated `docs` output. The required environment variables were not available in this workspace; no substitute credentials were introduced.
 
-- [x] Add one `portfolioScope` field to every asset with the allowed values `total`, `investable`, or `financial`.
-- [x] Add an optional `scopeRule` to asset-type definitions using the existing user-selectable, default, and locked rule behavior.
-- [x] Add a temporary `scopeNeedsReview` marker for assets whose scope cannot be inferred safely.
-- [x] Bump the encrypted portfolio file format from version 6 to version 7.
-- [x] Convert version 6 checking accounts to Investable scope.
-- [x] Convert eligible public investments to Financial scope.
-- [x] Convert private equity and real estate to Total-only scope by default.
-- [x] Preserve asset IDs, snapshots, values, dimensions, strategy, income, and simplified liabilities during conversion.
-- [x] Add migration tests for every inference path, ambiguous assets, and repeated upgrades.
+## Milestone 1 — Settings information architecture
 
-## Milestone 2 — Scope calculations and invariants
+- [x] Replace the scrolling configuration modal with a full-screen settings workspace.
+- [x] Add persistent section navigation for General, Portfolio Views, Strategy, Asset Types, Dimensions, Liability Types, and Data & Integrations.
+- [x] Display one primary settings section at a time.
+- [x] Keep the settings title, unsaved-changes state, and Done control visible while navigating.
+- [x] Return the user to the portfolio without losing changes when Done is selected.
+- [x] Preserve the existing behavior where settings update the in-memory portfolio and mark it as unsaved.
+- [x] Use a compact section selector on narrow screens instead of the desktop sidebar.
 
-- [x] Add a single helper that determines whether an asset belongs to the Total, Investable, or Financial view.
-- [x] Calculate Total Assets from every active asset.
-- [x] Calculate Total Net Worth as Total Assets minus all liabilities.
-- [x] Calculate Investable Assets from Investable and Financial assets.
-- [x] Calculate the Financial Portfolio from Financial assets only.
-- [x] Keep liabilities out of the Investable and Financial views.
-- [x] Guarantee `Financial Portfolio <= Investable Assets <= Total Assets` without clamping calculated values.
-- [x] Make allocation and concentration calculations accept an explicit portfolio view.
-- [x] Add unit tests for scope inclusion, ownership shares, closed assets, liabilities, and the nested asset relationship.
+## Milestone 2 — Shared settings components
 
-## Milestone 3 — Asset and asset-type configuration
+- [x] Create a reusable settings shell containing the header, navigation, content area, and sticky action area.
+- [x] Create reusable section-heading, summary-card, collapsible-panel, and validation-message components.
+- [x] Continue using the shared `TextInput` component for every labeled text and numeric input.
+- [x] Use consistent plus and red trash icons for all add and delete actions.
+- [x] Keep destructive controls separated from Done and other primary actions.
+- [x] Preserve keyboard focus when changing sections or selecting an item in a master-detail editor.
+- [x] Add accessible names, selected states, and keyboard navigation to the settings navigation.
 
-- [x] Add the shared portfolio-scope selector to the asset add/edit modal.
-- [x] Explain each scope beside the selector using concise examples.
-- [x] Apply asset-type scope defaults when adding an asset or changing its type.
-- [x] Disable scope editing when the selected asset type locks the value.
-- [x] Add scope-rule controls to the asset-type configuration screen.
-- [x] Show a visible review warning on migrated assets marked `scopeNeedsReview`.
-- [x] Clear the review marker after the user explicitly confirms or changes the scope.
-- [x] Preserve the selected scope in every monthly snapshot so later reclassification does not rewrite history.
+## Milestone 3 — General and Portfolio Views
 
-## Milestone 4 — Three portfolio views
+- [x] Move base currency into a concise General section.
+- [x] Add a Portfolio Views section explaining Total Net Worth, Investable Assets, and Financial Portfolio.
+- [x] Show the nested scope relationship and current asset count/value for each view.
+- [x] Show how many assets still require portfolio-scope review.
+- [x] Provide a direct action to return to the portfolio and review flagged assets.
+- [x] Keep scope semantics fixed; asset and asset-type scope assignment remains in their respective editors.
 
-- [x] Add a primary view selector for Total Net Worth, Investable Assets, and Financial Portfolio.
-- [x] Display the correct headline metric and explanation for each view.
-- [x] Filter the asset table by the selected view while keeping one underlying asset record.
-- [x] Filter allocation charts and concentration tables by the selected view.
-- [x] Keep the simplified liability table visible only where it is relevant to Total Net Worth.
-- [x] Preserve the selected view while navigating monthly snapshots.
-- [x] Add history series for Total Assets, Investable Assets, and Financial Portfolio.
-- [x] Add a combined history comparison for the three nested asset totals.
-- [x] Keep contribution-adjusted Total Net Worth history behavior intact.
+## Milestone 4 — Strategy editor restructuring
 
-## Milestone 5 — Strategy and cash-reserve integration
+- [x] Place the checking-account cash-reserve target at the top of the Strategy section.
+- [x] Present each allocation dimension as a collapsible card instead of one continuous form.
+- [x] Show each collapsed card’s mode, importance, configured category count, and validation state.
+- [x] Expand one dimension at a time for target, limit, tolerance, and importance editing.
+- [x] Clearly state that strategy targets and recommendations use the Financial Portfolio.
+- [x] Keep informational, target, limits, and disabled modes unchanged.
+- [x] Show target-total validation beside the affected dimension and in the Strategy section summary.
+- [x] Highlight categories configured in the strategy but absent from the current Financial Portfolio without deleting their settings.
 
-- [x] Evaluate strategy targets, limits, and recommendation scores against Financial assets only.
-- [x] Require recommendation destinations to have Financial scope and be eligible for additional investment.
-- [x] Calculate the reserve from active Investable or Financial checking accounts.
-- [x] Model surplus movement out of checking accounts and into Financial investments.
-- [x] Verify that a projected transfer leaves Total Assets, Total Net Worth, and Investable Assets unchanged.
-- [x] Verify that the projected Financial Portfolio increases by the allocated surplus.
-- [x] Explain when no Financial asset can accept the surplus without breaking a configured maximum.
-- [x] Update the sample portfolio to demonstrate Total-only, Investable, and Financial assets.
+## Milestone 5 — Asset Types master-detail editor
 
-## Milestone 6 — Verification and delivery
+- [x] Replace the stacked asset-type forms with a searchable list on the left and the selected type editor on the right.
+- [x] Show each asset type’s name, portfolio-scope rule summary, and number of assets using it.
+- [x] Keep Add Asset Type in the list header and Delete on the far right of the selected type editor.
+- [x] Prevent deletion of asset types currently used by assets.
+- [x] Put the asset-type name and portfolio-scope rule in a compact General subsection.
+- [x] Collapse dimension rules by default and summarize the number of locked, default, user-selected, and not-applicable rules.
+- [x] Allow individual dimension rules to expand for mode and value editing.
+- [x] Preserve all existing default, locked, user-selectable, and not-applicable behavior.
+- [x] Keep the selected asset type visible while searching or editing its details.
 
-- [x] Add component coverage for scope selectors, locked defaults, view filtering, and migration-review warnings.
+## Milestone 6 — Dimensions and Liability Types
+
+- [x] Replace the stacked dimension editor with a searchable master-detail layout.
+- [x] Show the selected dimension’s name and values in a sortable table.
+- [x] Keep Add Value in the values header and the red trash action at the far right of each value row.
+- [x] Prevent removal of dimension values that are still referenced by assets, strategies, or asset-type rules.
+- [x] Show reference counts or a concise explanation when deletion is unavailable.
+- [x] Use the same compact master-detail pattern for Liability Types.
+- [x] Preserve existing protection against deleting liability types currently in use.
+
+## Milestone 7 — Data, integrations, and advanced controls
+
+- [x] Move Google Drive status and availability into Data & Integrations.
+- [x] Continue displaying initialization errors and disabling Drive operations after discovery failure.
+- [x] Place the raw JSON editor in a clearly marked Advanced subsection.
+- [x] Explain that invalid JSON or manual structural changes can make the portfolio unreadable.
+- [x] Keep import, export, file encryption, and save behavior unchanged.
+- [x] Do not introduce a portfolio file-version migration unless implementation requires a persisted structural change.
+
+## Milestone 8 — Responsive behavior and usability
+
+- [x] Use a two-column master-detail layout on desktop and a list-to-detail flow on mobile.
+- [x] Keep important controls visible without requiring the user to scroll to the bottom of a long section.
+- [x] Preserve the active settings section while opening and closing nested editors.
+- [x] Add empty states for missing asset types, dimensions, values, and liability types.
+- [x] Add search-result empty states with a clear way to reset the search.
+- [x] Ensure all controls have visible focus indicators and work without a mouse.
+- [x] Confirm long names, many categories, and small screens do not cause horizontal page overflow.
+
+## Milestone 9 — Verification and delivery
+
+- [x] Add component tests for settings navigation, responsive section selection, and validation indicators.
+- [x] Add component tests for asset-type and dimension master-detail selection, search, add, and protected deletion.
+- [x] Verify existing strategy, asset-type, dimension, liability-type, JSON, and Google Drive tests remain green.
+- [x] Exercise every settings section, editing flow, validation state, and mobile layout in a real browser.
+- [x] Confirm closing and reopening settings does not lose in-memory changes.
+- [x] Confirm the portfolio dirty indicator still reflects settings changes.
+- [x] Bump the application version.
 - [x] Run the complete automated test suite.
-- [x] Exercise all three views, asset editing, configuration, history, and cash guidance in a real browser.
-- [x] Confirm Google Drive discovery failure still displays an error and disables Drive operations.
-- [x] Bump the application version after the code change.
-- [ ] Run plain `npm run build` with the existing Google credential environment variables. Blocked: both required variables are absent from this environment.
-- [ ] Commit the regenerated `docs` production site with the implementation changes. Blocked until the credentialed production build can run.
+- [ ] Run plain `npm run build` using the existing Google credential environment variables.
+- [ ] Commit the regenerated `docs` production site with the implementation changes.

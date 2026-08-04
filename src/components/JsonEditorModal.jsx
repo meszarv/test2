@@ -25,7 +25,7 @@ export default function JsonEditorModal({ open, onClose, data, onSave }) {
 
   if (!open) return null;
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
       <div className="bg-zinc-900 rounded-xl p-4 w-full max-w-3xl space-y-3">
         <h2 className="text-lg font-medium">Edit JSON</h2>
         <textarea

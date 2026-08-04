@@ -452,29 +452,30 @@ export default function App() {
       )}
 
       {configOpen && (
-        <div className="fixed inset-0 z-30 bg-black/60 flex items-center justify-center p-4 md:p-6">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 md:p-6 max-w-6xl w-full max-h-full overflow-y-auto space-y-4">
-            <div className="flex justify-between items-center">
-              <h2 className="text-xl font-semibold">Configuration</h2>
-              <button onClick={() => setConfigOpen(false)} title="Close" className="h-8 w-8 rounded-lg bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 flex items-center justify-center">✖</button>
-            </div>
-            <ConfigPage
-              assetTypes={assetTypes}
-              setAssetTypes={setAssetTypes}
-              liabilityTypes={liabilityTypes}
-              setLiabilityTypes={setLiabilityTypes}
-              currency={currency}
-              setCurrency={setCurrency}
-              dimensions={dimensions}
-              setDimensions={setDimensions}
-              strategy={strategy}
-              setStrategy={setStrategy}
-              assets={assets}
-              liabilities={liabilities}
-              onEditJson={() => { setConfigOpen(false); setJsonOpen(true); }}
-            />
-          </div>
-        </div>
+        <ConfigPage
+          assetTypes={assetTypes}
+          setAssetTypes={setAssetTypes}
+          liabilityTypes={liabilityTypes}
+          setLiabilityTypes={setLiabilityTypes}
+          currency={currency}
+          setCurrency={setCurrency}
+          dimensions={dimensions}
+          setDimensions={setDimensions}
+          strategy={strategy}
+          setStrategy={setStrategy}
+          assets={snapshots[snapshots.length - 1]?.assets || assets}
+          liabilities={snapshots[snapshots.length - 1]?.liabilities || liabilities}
+          dirty={dirty}
+          driveConfigured={driveConfigured}
+          driveAvailable={driveAvailable}
+          onDone={() => setConfigOpen(false)}
+          onEditJson={() => setJsonOpen(true)}
+          onReviewScopes={() => {
+            setConfigOpen(false);
+            setPortfolioView("total");
+            if (snapshots.length) handleSelectSnapshot(snapshots.length - 1);
+          }}
+        />
       )}
     </div>
   );
