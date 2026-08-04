@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { concentrationRows, dimensionName } from "../data.js";
+import { concentrationRows, dimensionName, portfolioViews } from "../data.js";
 import { formatCurrency } from "../utils.js";
 
 function targetLabel(row, mode) {
@@ -12,11 +12,12 @@ function targetLabel(row, mode) {
   return "—";
 }
 
-export default function ConcentrationPanel({ assets, assetTypes, dimensions, strategy, currency, selectedDimension, onSelectDimension }) {
+export default function ConcentrationPanel({ assets, assetTypes, dimensions, strategy, currency, selectedDimension, onSelectDimension, portfolioView = "total" }) {
   const [sort, setSort] = useState({ key: "amount", asc: false });
-  const policy = strategy.dimensionPolicies?.[selectedDimension] || { mode: "informational", categories: {} };
+  const configuredPolicy = strategy.dimensionPolicies?.[selectedDimension] || { mode: "informational", categories: {} };
+  const policy = portfolioView === "financial" ? configuredPolicy : { ...configuredPolicy, mode: "informational" };
   const rows = useMemo(() => {
-    const result = concentrationRows(assets, selectedDimension, policy, assetTypes, dimensions);
+    const result = concentrationRows(assets, selectedDimension, policy, assetTypes, dimensions, {}, portfolioView);
     result.sort((left, right) => {
       const a = left[sort.key];
       const b = right[sort.key];
@@ -24,7 +25,7 @@ export default function ConcentrationPanel({ assets, assetTypes, dimensions, str
       return sort.asc ? comparison : -comparison;
     });
     return result;
-  }, [assets, selectedDimension, policy, assetTypes, dimensions, sort]);
+  }, [assets, selectedDimension, policy, assetTypes, dimensions, portfolioView, sort]);
 
   function toggleSort(key) {
     setSort((current) => current.key === key ? { key, asc: !current.asc } : { key, asc: true });
@@ -53,7 +54,9 @@ export default function ConcentrationPanel({ assets, assetTypes, dimensions, str
             ))}
           </select>
         </label>
-        <span className="text-xs text-zinc-500">Strategy mode: {policy.mode || "informational"}</span>
+        <span className="text-xs text-zinc-500">
+          {portfolioViews[portfolioView]?.name} · {portfolioView === "financial" ? `Strategy mode: ${policy.mode || "informational"}` : "Analysis only"}
+        </span>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">

@@ -78,6 +78,7 @@ export const defaultDimensions = {
 export const defaultAssetTypes = {
   cash: {
     name: "Cash",
+    scopeRule: { mode: "default", value: "investable" },
     dimensionRules: {
       liquidity: { mode: "locked", value: "immediate" },
       investment_strategy: { mode: "default", value: "cash_reserve" },
@@ -87,6 +88,7 @@ export const defaultAssetTypes = {
   },
   real_estate: {
     name: "Real estate",
+    scopeRule: { mode: "default", value: "total" },
     dimensionRules: {
       liquidity: { mode: "locked", value: "illiquid" },
       custodian: { mode: "default", value: "direct" },
@@ -96,6 +98,7 @@ export const defaultAssetTypes = {
   },
   stock: {
     name: "Stock",
+    scopeRule: { mode: "default", value: "financial" },
     dimensionRules: {
       liquidity: { mode: "default", value: "days" },
       investment_strategy: { mode: "default", value: "long_term_growth" },
@@ -104,6 +107,7 @@ export const defaultAssetTypes = {
   },
   private_equity: {
     name: "Private equity",
+    scopeRule: { mode: "default", value: "total" },
     dimensionRules: {
       liquidity: { mode: "default", value: "illiquid" },
       volatility: { mode: "default", value: "very_high" },
@@ -111,6 +115,7 @@ export const defaultAssetTypes = {
   },
   bond: {
     name: "Bond",
+    scopeRule: { mode: "default", value: "financial" },
     dimensionRules: {
       liquidity: { mode: "default", value: "days" },
       investment_strategy: { mode: "default", value: "income" },
@@ -119,6 +124,7 @@ export const defaultAssetTypes = {
   },
   commodity: {
     name: "Commodity",
+    scopeRule: { mode: "default", value: "financial" },
     dimensionRules: {
       liquidity: { mode: "default", value: "days" },
       volatility: { mode: "default", value: "high" },
@@ -148,6 +154,22 @@ export const defaultStrategy = {
 };
 
 export const dimensionKeys = ["asset_type", ...Object.keys(defaultDimensions)];
+
+export const portfolioViews = {
+  total: { name: "Total Net Worth", assetLabel: "Total Assets" },
+  investable: { name: "Investable Assets", assetLabel: "Investable Assets" },
+  financial: { name: "Financial Portfolio", assetLabel: "Financial Portfolio" },
+};
+
+export const portfolioScopeOptions = {
+  total: { name: "Total only", description: "Material wealth outside accessible investment capital." },
+  investable: { name: "Investable", description: "Accessible capital outside or inside the managed strategy." },
+  financial: { name: "Financial Portfolio", description: "Assets actively managed under the investment strategy." },
+};
+
+export function validPortfolioScope(value) {
+  return Object.prototype.hasOwnProperty.call(portfolioScopeOptions, value);
+}
 
 export function cloneDefaults(value) {
   return JSON.parse(JSON.stringify(value));
@@ -196,10 +218,14 @@ export function mergeStrategy(strategy = {}, legacyAllocation = {}) {
 
 export function normalizeAsset(asset = {}, assetTypes = defaultAssetTypes) {
   const type = asset.type || Object.keys(assetTypes)[0] || "cash";
+  const scopeRule = assetTypes[type]?.scopeRule;
+  const inferredScope = scopeRule?.value && validPortfolioScope(scopeRule.value) ? scopeRule.value : "total";
   const normalized = {
     id: asset.id || "",
     name: asset.name || assetTypes[type]?.name || type,
     type,
+    portfolioScope: validPortfolioScope(asset.portfolioScope) ? asset.portfolioScope : inferredScope,
+    scopeNeedsReview: !!asset.scopeNeedsReview,
     description: asset.description || "",
     ownership: asset.ownership || "personal",
     ownershipShare: asset.ownershipShare == null ? 100 : Number(asset.ownershipShare),
@@ -221,8 +247,27 @@ export function normalizeAsset(asset = {}, assetTypes = defaultAssetTypes) {
   return applyAssetTypeRules(normalized, assetTypes, false);
 }
 
+export function normalizeStoredAsset(asset = {}, assetTypes = defaultAssetTypes) {
+  const normalized = normalizeAsset(asset, assetTypes);
+  return {
+    ...normalized,
+    portfolioScope: validPortfolioScope(asset.portfolioScope) ? asset.portfolioScope : normalized.portfolioScope,
+    scopeNeedsReview: !!asset.scopeNeedsReview,
+  };
+}
+
 export function applyAssetTypeRules(asset, assetTypes, overwriteDefaults = false) {
   const out = { ...asset, dimensions: cloneDefaults(asset.dimensions || {}) };
+  const scopeRule = assetTypes?.[out.type]?.scopeRule;
+  if (scopeRule?.mode === "locked" && validPortfolioScope(scopeRule.value)) {
+    out.portfolioScope = scopeRule.value;
+  } else if (
+    scopeRule?.mode === "default" &&
+    validPortfolioScope(scopeRule.value) &&
+    (overwriteDefaults || !validPortfolioScope(out.portfolioScope))
+  ) {
+    out.portfolioScope = scopeRule.value;
+  }
   const rules = assetTypes?.[out.type]?.dimensionRules || {};
   for (const [dimension, rule] of Object.entries(rules)) {
     if (rule.mode === "na") {
@@ -263,6 +308,43 @@ export function totalAssets(assets) {
   return (assets || []).reduce((sum, asset) => sum + assetValue(asset), 0);
 }
 
+export function assetInPortfolioView(asset, view = "total") {
+  if (!asset) return false;
+  if (view === "total") return true;
+  if (view === "investable") return asset.portfolioScope === "investable" || asset.portfolioScope === "financial";
+  if (view === "financial") return asset.portfolioScope === "financial";
+  return false;
+}
+
+export function assetsForPortfolioView(assets, view = "total") {
+  return (assets || []).filter((asset) => assetInPortfolioView(asset, view));
+}
+
+export function assetTotalForView(assets, view = "total", valueOverrides = {}) {
+  return (assets || []).reduce((sum, asset) => {
+    if (!assetInPortfolioView(asset, view)) return sum;
+    if (asset.status === "closed" || asset.status === "sold") return sum;
+    const value = Object.prototype.hasOwnProperty.call(valueOverrides, asset.id)
+      ? Number(valueOverrides[asset.id]) || 0
+      : assetValue(asset);
+    return sum + value;
+  }, 0);
+}
+
+export function portfolioMetrics(assets, liabilities = [], valueOverrides = {}) {
+  const total = assetTotalForView(assets, "total", valueOverrides);
+  const investable = assetTotalForView(assets, "investable", valueOverrides);
+  const financial = assetTotalForView(assets, "financial", valueOverrides);
+  const debt = (liabilities || []).reduce((sum, liability) => sum + (Number(liability.value) || 0), 0);
+  return {
+    totalAssets: total,
+    totalLiabilities: debt,
+    totalNetWorth: total - debt,
+    investableAssets: investable,
+    financialPortfolio: financial,
+  };
+}
+
 export function dimensionRegistry(key, assetTypes, dimensions) {
   if (key === "asset_type") return assetTypes || {};
   return dimensions?.[key]?.values || {};
@@ -288,9 +370,11 @@ export function exposureForAsset(asset, key, assetTypes = {}) {
   return Object.fromEntries(positive.map(([value, pct]) => [value, (Number(pct) / total) * 100]));
 }
 
-export function currentByDimension(assets, key, assetTypes = {}, valueOverrides = {}) {
+export function currentByDimension(assets, key, assetTypes = {}, valueOverrides = {}, portfolioView = "total") {
   const amounts = {};
   for (const asset of assets || []) {
+    if (!assetInPortfolioView(asset, portfolioView)) continue;
+    if (asset.status === "closed" || asset.status === "sold") continue;
     const value = Object.prototype.hasOwnProperty.call(valueOverrides, asset.id)
       ? Number(valueOverrides[asset.id]) || 0
       : assetValue(asset);
@@ -305,8 +389,8 @@ export function currentByDimension(assets, key, assetTypes = {}, valueOverrides 
   return amounts;
 }
 
-export function concentrationRows(assets, key, policy = {}, assetTypes = {}, dimensions = {}, valueOverrides = {}) {
-  const amounts = currentByDimension(assets, key, assetTypes, valueOverrides);
+export function concentrationRows(assets, key, policy = {}, assetTypes = {}, dimensions = {}, valueOverrides = {}, portfolioView = "total") {
+  const amounts = currentByDimension(assets, key, assetTypes, valueOverrides, portfolioView);
   const total = Object.values(amounts).reduce((sum, amount) => sum + amount, 0);
   const registry = dimensionRegistry(key, assetTypes, dimensions);
   const categories = policy.categories || {};
@@ -352,7 +436,7 @@ function strategyPenalty(assets, strategy, assetTypes, dimensions, valueOverride
     if (policy.mode !== "target" && policy.mode !== "limits") continue;
     activePolicies += 1;
     const importance = Math.max(0.1, Number(policy.importance) || 1);
-    for (const row of concentrationRows(assets, key, policy, assetTypes, dimensions, valueOverrides)) {
+    for (const row of concentrationRows(assets, key, policy, assetTypes, dimensions, valueOverrides, "financial")) {
       if (policy.mode === "target" && row.target != null) {
         penalty += Math.max(0, Math.abs(row.current - row.target) - (Number(policy.tolerance) || 0)) * importance;
       } else if (policy.mode === "limits") {
@@ -367,8 +451,8 @@ function strategyPenalty(assets, strategy, assetTypes, dimensions, valueOverride
 function worsensMaximumLimit(assets, strategy, assetTypes, dimensions, currentValues, trialValues) {
   for (const [key, policy] of Object.entries(strategy?.dimensionPolicies || {})) {
     if (policy.mode !== "limits") continue;
-    const before = new Map(concentrationRows(assets, key, policy, assetTypes, dimensions, currentValues).map((row) => [row.category, row]));
-    const after = concentrationRows(assets, key, policy, assetTypes, dimensions, trialValues);
+    const before = new Map(concentrationRows(assets, key, policy, assetTypes, dimensions, currentValues, "financial").map((row) => [row.category, row]));
+    const after = concentrationRows(assets, key, policy, assetTypes, dimensions, trialValues, "financial");
     for (const row of after) {
       if (row.max == null || row.current <= row.max + 1e-9) continue;
       const previous = before.get(row.category)?.current || 0;
@@ -380,11 +464,11 @@ function worsensMaximumLimit(assets, strategy, assetTypes, dimensions, currentVa
 
 export function recommendSurplusCash(assets, strategy, assetTypes = {}, dimensions = {}) {
   const activeAssets = (assets || []).filter((asset) => asset.status !== "closed" && asset.status !== "sold");
-  const checking = activeAssets.filter((asset) => asset.isCheckingAccount);
+  const checking = activeAssets.filter((asset) => asset.isCheckingAccount && assetInPortfolioView(asset, "investable"));
   const checkingCash = checking.reduce((sum, asset) => sum + assetValue(asset), 0);
   const reserveTarget = Math.max(0, Number(strategy?.cashReserveTarget) || 0);
   const surplus = Math.max(0, checkingCash - reserveTarget);
-  const candidates = activeAssets.filter((asset) => asset.eligibleForInvestment && !asset.isCheckingAccount);
+  const candidates = activeAssets.filter((asset) => asset.portfolioScope === "financial" && asset.eligibleForInvestment && !asset.isCheckingAccount);
   const initialValues = Object.fromEntries(activeAssets.map((asset) => [asset.id, assetValue(asset)]));
   const result = {
     checkingCash,
@@ -393,6 +477,8 @@ export function recommendSurplusCash(assets, strategy, assetTypes = {}, dimensio
     plan: [],
     currentValues: initialValues,
     projectedValues: { ...initialValues },
+    currentMetrics: portfolioMetrics(activeAssets, [], initialValues),
+    projectedMetrics: portfolioMetrics(activeAssets, [], initialValues),
     unallocated: 0,
     reason: "",
   };
@@ -447,6 +533,7 @@ export function recommendSurplusCash(assets, strategy, assetTypes = {}, dimensio
       result.projectedValues[asset.id] = (result.projectedValues[asset.id] || 0) + result.unallocated * share;
     }
   }
+  result.projectedMetrics = portfolioMetrics(activeAssets, [], result.projectedValues);
   result.reason = result.plan.length
     ? result.unallocated > 0.01
       ? "Part of the surplus cannot be allocated without exceeding a configured maximum."
@@ -550,11 +637,32 @@ export function groupByPeriod(points, mode) {
   return Array.from(map.values()).sort((a, b) => a.lastDate - b.lastDate);
 }
 
-export function buildSeries(snapshots, period) {
-  const points = (snapshots || []).map((snapshot) => ({
-    date: new Date(snapshot.asOf),
-    value: netWorth(snapshot.assets || [], snapshot.liabilities || []),
-    ...currentByDimension(snapshot.assets || [], "asset_type"),
-  }));
+export function buildSeries(snapshots, period, portfolioView = "total", assetTypes = {}) {
+  const points = (snapshots || []).map((snapshot) => {
+    const metrics = portfolioMetrics(snapshot.assets || [], snapshot.liabilities || []);
+    const value = portfolioView === "total"
+      ? metrics.totalNetWorth
+      : portfolioView === "investable"
+      ? metrics.investableAssets
+      : metrics.financialPortfolio;
+    return {
+      date: new Date(snapshot.asOf),
+      value,
+      ...currentByDimension(snapshot.assets || [], "asset_type", assetTypes, {}, portfolioView),
+    };
+  });
+  return groupByPeriod(points, period).map(({ lastDate: _lastDate, ...rest }) => rest);
+}
+
+export function buildPortfolioComparisonSeries(snapshots, period) {
+  const points = (snapshots || []).map((snapshot) => {
+    const metrics = portfolioMetrics(snapshot.assets || [], snapshot.liabilities || []);
+    return {
+      date: new Date(snapshot.asOf),
+      totalAssets: metrics.totalAssets,
+      investableAssets: metrics.investableAssets,
+      financialPortfolio: metrics.financialPortfolio,
+    };
+  });
   return groupByPeriod(points, period).map(({ lastDate: _lastDate, ...rest }) => rest);
 }

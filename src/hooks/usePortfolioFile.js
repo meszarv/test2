@@ -17,6 +17,7 @@ import {
   defaultStrategy,
   mergeStrategy,
   normalizeAsset,
+  normalizeStoredAsset,
 } from "../data.js";
 import { mkId, labelFor, mkAsset } from "../utils.js";
 
@@ -145,12 +146,9 @@ export default function usePortfolioFile({
             tolerance: 2,
             importance: 3,
             categories: {
-              cash: { target: 10 },
-              real_estate: { target: 25 },
-              stock: { target: 45 },
-              private_equity: { target: 5 },
-              bond: { target: 10 },
-              commodity: { target: 5 },
+              stock: { target: 65 },
+              bond: { target: 25 },
+              commodity: { target: 10 },
             },
           },
         },
@@ -202,7 +200,7 @@ export default function usePortfolioFile({
       const at = data.assetTypes || defaultAssetTypes;
       const lt = data.liabilityTypes || defaultLiabilityTypes;
       if (latest) {
-        setAssets((latest.assets || []).map((a) => normalizeAsset({ ...a, id: a.id || mkId(), name: a.name || labelFor(a.type, at) }, at)));
+        setAssets((latest.assets || []).map((a) => normalizeStoredAsset({ ...a, id: a.id || mkId(), name: a.name || labelFor(a.type, at) }, at)));
         setLiabilities(
           (latest.liabilities || []).map((l) => ({
             ...l,

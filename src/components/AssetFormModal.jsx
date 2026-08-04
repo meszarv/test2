@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { applyAssetTypeRules, assetValue, normalizeAsset } from "../data.js";
+import { applyAssetTypeRules, assetValue, normalizeAsset, portfolioScopeOptions } from "../data.js";
 import { formatCurrency, mkAsset } from "../utils.js";
 import DimensionExposureEditor from "./DimensionExposureEditor.jsx";
 import TextInput from "./TextInput.jsx";
@@ -46,7 +46,7 @@ export default function AssetFormModal({
 
   function submit(event) {
     event.preventDefault();
-    const normalized = normalizeAsset(draft, assetTypes);
+    const normalized = { ...normalizeAsset(draft, assetTypes), scopeNeedsReview: false };
     if (!normalized.name.trim()) return;
     onSave(normalized);
     onClose();
@@ -54,6 +54,7 @@ export default function AssetFormModal({
 
   if (!open) return null;
   const rules = assetTypes[draft.type]?.dimensionRules || {};
+  const scopeRule = assetTypes[draft.type]?.scopeRule || { mode: "user", value: "" };
 
   return (
     <div className="fixed inset-0 z-40 bg-black/60 flex items-center justify-center p-4">
@@ -62,6 +63,12 @@ export default function AssetFormModal({
           <h2 className="text-lg font-medium">{asset ? "Edit asset" : "Add asset"}</h2>
           <p className="text-xs text-zinc-500 mt-1">Current portfolio value: {formatCurrency(calculatedValue, currency)}</p>
         </div>
+
+        {draft.scopeNeedsReview && (
+          <div className="rounded-xl border border-amber-700 bg-amber-950/30 p-3 text-sm text-amber-200">
+            Review this asset’s portfolio scope. It could not be classified safely during the file upgrade; saving confirms your selection.
+          </div>
+        )}
 
         <div className="grid md:grid-cols-3 gap-3">
           <TextInput autoFocus label="Asset name" value={draft.name} onChange={(value) => set("name", value)} />
@@ -106,6 +113,36 @@ export default function AssetFormModal({
           </label>
           <TextInput label="Pricing currency" value={draft.pricingCurrency} onChange={(value) => set("pricingCurrency", value.toUpperCase())} />
           <TextInput label="Valuation date" type="date" value={draft.valuationDate} onChange={(value) => set("valuationDate", value)} />
+        </div>
+
+        <div className="border border-zinc-800 rounded-xl p-4 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 className="font-medium">Portfolio scope</h3>
+              <p className="text-xs text-zinc-500">Choose the narrowest view that should contain this asset.</p>
+            </div>
+            {scopeRule.mode === "locked" && <span className="text-xs uppercase text-zinc-500">Locked by asset type</span>}
+          </div>
+          <select
+            value={draft.portfolioScope}
+            onChange={(event) => setDraft((previous) => ({
+              ...previous,
+              portfolioScope: event.target.value,
+              scopeNeedsReview: false,
+            }))}
+            disabled={scopeRule.mode === "locked"}
+            className="w-full rounded-lg bg-zinc-900 border border-zinc-800 px-3 py-2 disabled:opacity-60"
+          >
+            {Object.entries(portfolioScopeOptions).map(([key, option]) => (
+              <option key={key} value={key}>{option.name}</option>
+            ))}
+          </select>
+          <p className="text-xs text-zinc-400">{portfolioScopeOptions[draft.portfolioScope]?.description}</p>
+          <div className="grid md:grid-cols-3 gap-2 text-xs text-zinc-500">
+            <div><span className="text-zinc-300">Total only:</span> home, private company, personal-use assets.</div>
+            <div><span className="text-zinc-300">Investable:</span> bank and emergency cash available to move.</div>
+            <div><span className="text-zinc-300">Financial:</span> ETFs, stocks, bonds, pension investments.</div>
+          </div>
         </div>
 
         <div className="border border-zinc-800 rounded-xl p-4 space-y-3">

@@ -15,11 +15,14 @@ import LineChart from "./components/LineChart.jsx";
 import PieChart from "./components/PieChart.jsx";
 import Section from "./components/Section.jsx";
 import SnapshotTabs from "./components/SnapshotTabs.jsx";
+import ScopeHistoryChart from "./components/ScopeHistoryChart.jsx";
 import StackedAreaChart from "./components/StackedAreaChart.jsx";
 import SurplusPlan from "./components/SurplusPlan.jsx";
 import TextInput from "./components/TextInput.jsx";
 import {
+  assetInPortfolioView,
   assetValue,
+  buildPortfolioComparisonSeries,
   buildSeries,
   cloneDefaults,
   currentByDimension,
@@ -28,10 +31,10 @@ import {
   defaultLiabilityTypes,
   defaultStrategy,
   dimensionRegistry,
-  netWorth,
-  normalizeAsset,
+  normalizeStoredAsset,
+  portfolioMetrics,
+  portfolioViews,
   recommendSurplusCash,
-  totalAssets,
 } from "./data.js";
 import { initDrive } from "./drive.js";
 import { DEFAULT_PORTFOLIO, upgradePortfolio } from "./file.js";
@@ -53,6 +56,7 @@ export default function App() {
   const [liabilities, setLiabilities] = useState([]);
   const [period, setPeriod] = useState("monthly");
   const [chartMode, setChartMode] = useState("total");
+  const [portfolioView, setPortfolioView] = useState("total");
   const [selectedDimension, setSelectedDimension] = useState("asset_type");
   const [configOpen, setConfigOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
@@ -176,7 +180,7 @@ export default function App() {
     setSnapshots(orderedSnapshots);
     const latest = orderedSnapshots[orderedSnapshots.length - 1];
     if (latest) {
-      setAssets((latest.assets || []).map((asset) => normalizeAsset({
+      setAssets((latest.assets || []).map((asset) => normalizeStoredAsset({
         ...asset,
         id: asset.id || mkId(),
         name: asset.name || labelFor(asset.type, nextAssetTypes),
@@ -201,22 +205,26 @@ export default function App() {
     setLiabilityTypes(nextLiabilityTypes);
   }
 
-  const totalNow = useMemo(() => netWorth(assets, liabilities), [assets, liabilities]);
-  const grossAssets = useMemo(() => totalAssets(assets), [assets]);
-  const totalLiabilities = useMemo(() => liabilities.reduce((sum, liability) => sum + (Number(liability.value) || 0), 0), [liabilities]);
-  const series = useMemo(() => buildSeries(snapshots, period), [snapshots, period]);
+  const metrics = useMemo(() => portfolioMetrics(assets, liabilities), [assets, liabilities]);
+  const headlineValue = portfolioView === "total"
+    ? metrics.totalNetWorth
+    : portfolioView === "investable"
+    ? metrics.investableAssets
+    : metrics.financialPortfolio;
+  const series = useMemo(() => buildSeries(snapshots, period, portfolioView, assetTypes), [snapshots, period, portfolioView, assetTypes]);
+  const comparisonSeries = useMemo(() => buildPortfolioComparisonSeries(snapshots, period), [snapshots, period]);
   const currentAmounts = useMemo(
-    () => currentByDimension(assets, selectedDimension, assetTypes),
-    [assets, selectedDimension, assetTypes]
+    () => currentByDimension(assets, selectedDimension, assetTypes, {}, portfolioView),
+    [assets, selectedDimension, assetTypes, portfolioView]
   );
   const selectedPolicy = strategy.dimensionPolicies?.[selectedDimension] || {};
   const targetAmounts = useMemo(() => {
-    if (selectedPolicy.mode !== "target") return {};
+    if (portfolioView !== "financial" || selectedPolicy.mode !== "target") return {};
     return Object.fromEntries(Object.entries(selectedPolicy.categories || {}).map(([category, config]) => [
       category,
-      grossAssets * ((Number(config.target) || 0) / 100),
+      metrics.financialPortfolio * ((Number(config.target) || 0) / 100),
     ]));
-  }, [selectedPolicy, grossAssets]);
+  }, [portfolioView, selectedPolicy, metrics.financialPortfolio]);
   const selectedRegistry = dimensionRegistry(selectedDimension, assetTypes, dimensions);
   const recommendation = useMemo(
     () => recommendSurplusCash(assets, strategy, assetTypes, dimensions),
@@ -224,13 +232,32 @@ export default function App() {
   );
   const previousAssets = currentIndex > 0 ? snapshots[currentIndex - 1]?.assets || [] : [];
   const previousLiabilities = currentIndex > 0 ? snapshots[currentIndex - 1]?.liabilities || [] : [];
-  const previousNetWorth = currentIndex > 0 ? netWorth(previousAssets, previousLiabilities) : null;
+  const previousMetrics = currentIndex > 0 ? portfolioMetrics(previousAssets, previousLiabilities) : null;
+  const previousHeadline = previousMetrics == null
+    ? null
+    : portfolioView === "total"
+    ? previousMetrics.totalNetWorth
+    : portfolioView === "investable"
+    ? previousMetrics.investableAssets
+    : previousMetrics.financialPortfolio;
   const currentSnapshot = snapshots[currentIndex];
-  const nominalChange = previousNetWorth == null ? null : totalNow - previousNetWorth;
+  const nominalChange = previousHeadline == null ? null : headlineValue - previousHeadline;
   const netExternalFlow = (Number(currentSnapshot?.contributions) || 0) - (Number(currentSnapshot?.withdrawals) || 0);
   const investmentChange = nominalChange == null ? null : nominalChange - netExternalFlow;
-  const latestValuationDate = assets.reduce((latest, asset) => asset.valuationDate && asset.valuationDate > latest ? asset.valuationDate : latest, "");
+  const visibleAssets = assets.filter((asset) => portfolioView === "total" || assetInPortfolioView(asset, portfolioView));
+  const previousVisibleAssets = previousAssets.filter((asset) => portfolioView === "total" || assetInPortfolioView(asset, portfolioView));
+  const latestValuationDate = visibleAssets.reduce((latest, asset) => asset.valuationDate && asset.valuationDate > latest ? asset.valuationDate : latest, "");
   const isLatestSnapshot = currentIndex === snapshots.length - 1;
+  const viewDescriptions = {
+    total: "All material assets less simplified liabilities.",
+    investable: "Accessible capital that can be invested or rebalanced.",
+    financial: "Assets actively managed under your investment strategy.",
+  };
+
+  function updateVisibleAssets(nextVisibleAssets) {
+    const updates = new Map(nextVisibleAssets.map((asset) => [asset.id, asset]));
+    setAssetsAndUpdateSnapshot(assets.map((asset) => updates.get(asset.id) || asset));
+  }
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
@@ -275,10 +302,25 @@ export default function App() {
             {error && <div className="p-3 rounded-xl bg-red-900/30 border border-red-800 text-red-200">{error}</div>}
             {loading && <div className="p-3 rounded-xl bg-zinc-800 text-zinc-300">Working…</div>}
 
+            <div className="grid sm:grid-cols-3 rounded-xl overflow-hidden border border-zinc-700">
+              {Object.entries(portfolioViews).map(([key, view]) => (
+                <button
+                  key={key}
+                  onClick={() => setPortfolioView(key)}
+                  className={`p-3 text-left border-zinc-700 sm:[&:not(:first-child)]:border-l ${portfolioView === key ? "bg-blue-600" : "bg-zinc-900 hover:bg-zinc-800"}`}
+                >
+                  <div className="font-medium">{view.name}</div>
+                  <div className={`text-xs mt-1 ${portfolioView === key ? "text-blue-100" : "text-zinc-500"}`}>
+                    {key === "total" ? formatCurrency(metrics.totalNetWorth, currency) : key === "investable" ? formatCurrency(metrics.investableAssets, currency) : formatCurrency(metrics.financialPortfolio, currency)}
+                  </div>
+                </button>
+              ))}
+            </div>
+
             <div className="grid lg:grid-cols-2 gap-6">
               <Section
                 title="Portfolio overview"
-                right={selectedPolicy.mode === "target" ? (
+                right={portfolioView === "financial" && selectedPolicy.mode === "target" ? (
                   <button
                     onMouseDown={() => setShowTarget(true)}
                     onMouseUp={() => setShowTarget(false)}
@@ -290,10 +332,15 @@ export default function App() {
                   </button>
                 ) : null}
               >
-                <div className="grid grid-cols-3 gap-3 mb-3">
-                  <div><div className="text-xs text-zinc-500">Net worth</div><div className="text-xl font-semibold">{formatCurrency(totalNow, currency)}</div></div>
-                  <div><div className="text-xs text-zinc-500">Gross assets</div><div>{formatCurrency(grossAssets, currency)}</div></div>
-                  <div><div className="text-xs text-zinc-500">Liabilities</div><div>{formatCurrency(totalLiabilities, currency)}</div></div>
+                <div className="mb-3">
+                  <div className="text-xs text-zinc-500">{portfolioViews[portfolioView].name}</div>
+                  <div className="text-2xl font-semibold">{formatCurrency(headlineValue, currency)}</div>
+                  <div className="text-xs text-zinc-400 mt-1">{viewDescriptions[portfolioView]}</div>
+                </div>
+                <div className="grid grid-cols-3 gap-3 mb-3 text-sm">
+                  <div><div className="text-xs text-zinc-500">Total assets</div><div>{formatCurrency(metrics.totalAssets, currency)}</div></div>
+                  <div><div className="text-xs text-zinc-500">Investable</div><div>{formatCurrency(metrics.investableAssets, currency)}</div></div>
+                  <div><div className="text-xs text-zinc-500">Financial</div><div>{formatCurrency(metrics.financialPortfolio, currency)}</div></div>
                 </div>
                 <PieChart data={currentAmounts} targetData={targetAmounts} showTarget={showTarget} assetTypes={selectedRegistry} />
                 <div className="mt-2 text-xs text-zinc-500">
@@ -310,20 +357,21 @@ export default function App() {
                       <option value="yearly">Yearly</option>
                     </select>
                     <div className="flex rounded-lg overflow-hidden border border-zinc-700 text-sm">
-                      <button onClick={() => setChartMode("total")} className={`px-2 py-1 ${chartMode === "total" ? "bg-blue-600" : "bg-zinc-800 hover:bg-zinc-700"}`}>Net worth</button>
+                      <button onClick={() => setChartMode("total")} className={`px-2 py-1 ${chartMode === "total" ? "bg-blue-600" : "bg-zinc-800 hover:bg-zinc-700"}`}>Current view</button>
                       <button onClick={() => setChartMode("category")} className={`px-2 py-1 ${chartMode === "category" ? "bg-blue-600" : "bg-zinc-800 hover:bg-zinc-700"}`}>By asset type</button>
+                      <button onClick={() => setChartMode("scopes")} className={`px-2 py-1 ${chartMode === "scopes" ? "bg-blue-600" : "bg-zinc-800 hover:bg-zinc-700"}`}>Compare scopes</button>
                     </div>
                   </div>
                 )}
               >
-                {chartMode === "total"
-                  ? <LineChart data={series} currency={currency} showGridlines={series.length > 2} showMarkers={series.length > 2} showVerticalGridlines={period === "monthly"} />
-                  : <StackedAreaChart data={series} assetTypes={assetTypes} currency={currency} />}
+                {chartMode === "total" && <LineChart data={series} currency={currency} showGridlines={series.length > 2} showMarkers={series.length > 2} showVerticalGridlines={period === "monthly"} />}
+                {chartMode === "category" && <StackedAreaChart data={series} assetTypes={assetTypes} currency={currency} />}
+                {chartMode === "scopes" && <ScopeHistoryChart data={comparisonSeries} currency={currency} />}
                 {nominalChange != null && (
-                  <div className="grid grid-cols-3 gap-2 mt-3 text-xs">
+                  <div className={`grid ${portfolioView === "total" ? "grid-cols-3" : "grid-cols-1"} gap-2 mt-3 text-xs`}>
                     <div><span className="text-zinc-500">Change </span>{formatCurrency(nominalChange, currency)}</div>
-                    <div><span className="text-zinc-500">Net added </span>{formatCurrency(netExternalFlow, currency)}</div>
-                    <div><span className="text-zinc-500">Investment change </span>{formatCurrency(investmentChange, currency)}</div>
+                    {portfolioView === "total" && <div><span className="text-zinc-500">Net added </span>{formatCurrency(netExternalFlow, currency)}</div>}
+                    {portfolioView === "total" && <div><span className="text-zinc-500">Investment change </span>{formatCurrency(investmentChange, currency)}</div>}
                   </div>
                 )}
               </Section>
@@ -342,10 +390,11 @@ export default function App() {
                 currency={currency}
                 selectedDimension={selectedDimension}
                 onSelectDimension={setSelectedDimension}
+                portfolioView={portfolioView}
               />
             </Section>
 
-            <Section title="Assets" right={isLatestSnapshot ? <AddBtn onClick={() => setAddOpen(true)} title="Add asset" /> : null}>
+            <Section title={`${portfolioViews[portfolioView].assetLabel} (${visibleAssets.length})`} right={isLatestSnapshot ? <AddBtn onClick={() => setAddOpen(true)} title="Add asset" /> : null}>
               <SnapshotTabs
                 snapshots={snapshots}
                 currentIndex={currentIndex}
@@ -358,9 +407,9 @@ export default function App() {
               />
               {!isLatestSnapshot && <div className="mb-3 rounded-lg border border-amber-900/60 bg-amber-950/20 p-2 text-xs text-amber-300">Historical snapshot: values are read-only.</div>}
               <AssetTable
-                assets={assets}
-                prevAssets={previousAssets}
-                setAssets={setAssetsAndUpdateSnapshot}
+                assets={visibleAssets}
+                prevAssets={previousVisibleAssets}
+                setAssets={updateVisibleAssets}
                 assetTypes={assetTypes}
                 currency={currency}
                 readOnly={!isLatestSnapshot}
@@ -368,7 +417,7 @@ export default function App() {
               />
             </Section>
 
-            <Section title="Liabilities" right={isLatestSnapshot ? <AddBtn onClick={() => setAddLiabilityOpen(true)} title="Add liability" /> : null}>
+            {portfolioView === "total" && <Section title="Liabilities" right={isLatestSnapshot ? <AddBtn onClick={() => setAddLiabilityOpen(true)} title="Add liability" /> : null}>
               <LiabilityTable
                 liabilities={liabilities}
                 prevLiabilities={previousLiabilities}
@@ -378,7 +427,7 @@ export default function App() {
                 readOnly={!isLatestSnapshot}
                 onEdit={setEditLiability}
               />
-            </Section>
+            </Section>}
 
             <Section title="Annual income and costs">
               <IncomeSection records={incomeRecords} setRecords={setIncomeRecords} assets={assets} currency={currency} />

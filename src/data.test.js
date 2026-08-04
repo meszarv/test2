@@ -6,6 +6,7 @@ import {
   concentrationRows,
   defaultDimensions,
   mergeStrategy,
+  portfolioMetrics,
   rebalance,
   recommendSurplusCash,
 } from './data.js';
@@ -106,8 +107,8 @@ test('recommendSurplusCash keeps the reserve and directs surplus toward target g
     },
   });
   const assets = [
-    { id: 'cash', name: 'Checking', type: 'cash', value: 60, ownershipShare: 100, isCheckingAccount: true },
-    { id: 'stock', name: 'ETF', type: 'stock', value: 40, ownershipShare: 100, eligibleForInvestment: true },
+    { id: 'cash', name: 'Checking', type: 'cash', portfolioScope: 'investable', value: 60, ownershipShare: 100, isCheckingAccount: true },
+    { id: 'stock', name: 'ETF', type: 'stock', portfolioScope: 'financial', value: 40, ownershipShare: 100, eligibleForInvestment: true },
   ];
   const recommendation = recommendSurplusCash(assets, strategy, {}, defaultDimensions);
   assert.equal(recommendation.checkingCash, 60);
@@ -116,6 +117,11 @@ test('recommendSurplusCash keeps the reserve and directs surplus toward target g
   assert.equal(recommendation.plan[0].assetId, 'stock');
   assert.equal(Math.round(recommendation.projectedValues.cash), 20);
   assert.equal(Math.round(recommendation.projectedValues.stock), 80);
+  assert.equal(Math.round(recommendation.currentMetrics.totalAssets), Math.round(recommendation.projectedMetrics.totalAssets));
+  assert.equal(Math.round(recommendation.currentMetrics.totalNetWorth), Math.round(recommendation.projectedMetrics.totalNetWorth));
+  assert.equal(Math.round(recommendation.currentMetrics.investableAssets), Math.round(recommendation.projectedMetrics.investableAssets));
+  assert.equal(recommendation.currentMetrics.financialPortfolio, 40);
+  assert.equal(Math.round(recommendation.projectedMetrics.financialPortfolio), 80);
 });
 
 test('recommendSurplusCash does not worsen a hard maximum', () => {
@@ -129,13 +135,44 @@ test('recommendSurplusCash does not worsen a hard maximum', () => {
     },
   });
   const assets = [
-    { id: 'cash', name: 'Checking', type: 'cash', value: 60, ownershipShare: 100, isCheckingAccount: true },
-    { id: 'stock', name: 'Stock ETF', type: 'stock', value: 40, ownershipShare: 100, eligibleForInvestment: true },
-    { id: 'bond', name: 'Bond ETF', type: 'bond', value: 0, ownershipShare: 100, eligibleForInvestment: true },
+    { id: 'cash', name: 'Checking', type: 'cash', portfolioScope: 'investable', value: 60, ownershipShare: 100, isCheckingAccount: true },
+    { id: 'stock', name: 'Stock ETF', type: 'stock', portfolioScope: 'financial', value: 40, ownershipShare: 100, eligibleForInvestment: true },
+    { id: 'bond', name: 'Bond ETF', type: 'bond', portfolioScope: 'financial', value: 0, ownershipShare: 100, eligibleForInvestment: true },
   ];
   const recommendation = recommendSurplusCash(assets, strategy, {}, defaultDimensions);
   assert.equal(recommendation.plan.some((item) => item.assetId === 'stock'), false);
   assert.equal(Math.round(recommendation.plan.find((item) => item.assetId === 'bond').amount), 40);
+});
+
+test('portfolioMetrics applies nested scopes, ownership, status, and liabilities', () => {
+  const assets = [
+    { id: 'home', portfolioScope: 'total', value: 100, ownershipShare: 100 },
+    { id: 'bank', portfolioScope: 'investable', value: 50, ownershipShare: 100 },
+    { id: 'etf', portfolioScope: 'financial', valuationMode: 'units', quantity: 2, unitPrice: 20, fxRate: 1, ownershipShare: 50 },
+    { id: 'closed', portfolioScope: 'financial', value: 900, ownershipShare: 100, status: 'closed' },
+  ];
+  const metrics = portfolioMetrics(assets, [{ value: 30 }]);
+  assert.deepEqual(metrics, {
+    totalAssets: 170,
+    totalLiabilities: 30,
+    totalNetWorth: 140,
+    investableAssets: 70,
+    financialPortfolio: 20,
+  });
+  assert.ok(metrics.financialPortfolio <= metrics.investableAssets);
+  assert.ok(metrics.investableAssets <= metrics.totalAssets);
+});
+
+test('concentrationRows filters amounts to the requested nested portfolio view', () => {
+  const assets = [
+    { id: 'home', type: 'real_estate', portfolioScope: 'total', value: 100, ownershipShare: 100 },
+    { id: 'bank', type: 'cash', portfolioScope: 'investable', value: 50, ownershipShare: 100 },
+    { id: 'etf', type: 'stock', portfolioScope: 'financial', value: 25, ownershipShare: 100 },
+  ];
+  const rows = concentrationRows(assets, 'asset_type', { mode: 'informational', categories: {} }, {}, defaultDimensions, {}, 'financial');
+  assert.equal(rows.find((row) => row.category === 'stock').amount, 25);
+  assert.equal(rows.some((row) => row.category === 'cash' && row.amount > 0), false);
+  assert.equal(rows.some((row) => row.category === 'real_estate' && row.amount > 0), false);
 });
 
 test('annualIncomeSummary keeps gross income and costs separate', () => {

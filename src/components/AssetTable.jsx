@@ -103,6 +103,7 @@ export default function AssetTable({
                 <td className="p-2">
                   <div>{asset.name}</div>
                   <div className="text-xs text-zinc-500">{asset.description || asset.status}</div>
+                  {asset.scopeNeedsReview && <div className="text-xs text-amber-400">⚠ Review portfolio scope</div>}
                 </td>
                 <td className="p-2">{assetTypes[asset.type]?.name || asset.type}</td>
                 <td className="p-2 text-right">

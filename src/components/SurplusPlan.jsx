@@ -5,8 +5,8 @@ function strategyEffects(assets, recommendation, strategy, assetTypes, dimension
   const effects = [];
   for (const [key, policy] of Object.entries(strategy.dimensionPolicies || {})) {
     if (policy.mode !== "target" && policy.mode !== "limits") continue;
-    const current = concentrationRows(assets, key, policy, assetTypes, dimensions, recommendation.currentValues);
-    const projected = concentrationRows(assets, key, policy, assetTypes, dimensions, recommendation.projectedValues);
+    const current = concentrationRows(assets, key, policy, assetTypes, dimensions, recommendation.currentValues, "financial");
+    const projected = concentrationRows(assets, key, policy, assetTypes, dimensions, recommendation.projectedValues, "financial");
     const projectedMap = new Map(projected.map((row) => [row.category, row]));
     for (const row of current) {
       const next = projectedMap.get(row.category);
@@ -47,6 +47,16 @@ export default function SurplusPlan({ recommendation, assets, strategy, assetTyp
       </div>
 
       <p className="text-sm text-zinc-400">{recommendation.reason}</p>
+      <div className="grid sm:grid-cols-2 gap-3 text-sm">
+        <div className="rounded-xl border border-zinc-800 p-3">
+          <div className="text-xs text-zinc-500">Financial Portfolio after plan</div>
+          <div>{formatCurrency(recommendation.currentMetrics.financialPortfolio, currency)} → <span className="text-blue-300">{formatCurrency(recommendation.projectedMetrics.financialPortfolio, currency)}</span></div>
+        </div>
+        <div className="rounded-xl border border-zinc-800 p-3">
+          <div className="text-xs text-zinc-500">Investable Assets after transfer</div>
+          <div>{formatCurrency(recommendation.currentMetrics.investableAssets, currency)} → {formatCurrency(recommendation.projectedMetrics.investableAssets, currency)}</div>
+        </div>
+      </div>
       {recommendation.unallocated > 0.01 && (
         <div className="rounded-lg border border-amber-800 bg-amber-950/20 p-3 text-sm text-amber-300">
           {formatCurrency(recommendation.unallocated, currency)} remains in checking accounts because every further allocation would break a configured maximum.

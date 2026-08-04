@@ -7,6 +7,8 @@ import {
   mergeDimensions,
   mergeStrategy,
   normalizeAsset,
+  normalizeStoredAsset,
+  validPortfolioScope,
 } from "./data.js";
 
 const DB_NAME = "portfolio-tracker-db";
@@ -109,7 +111,7 @@ export async function decryptPortfolio(buf, password) {
 }
 
 export const DEFAULT_PORTFOLIO = {
-  version: 6,
+  version: 7,
   currency: "EUR",
   assetTypes: cloneDefaults(defaultAssetTypes),
   liabilityTypes: cloneDefaults(defaultLiabilityTypes),
@@ -177,6 +179,61 @@ export function convertV5ToV6(data) {
   };
 }
 
+function assetTypesWithScopeRules(assetTypes = {}) {
+  return Object.fromEntries(
+    Object.entries(assetTypes).map(([key, definition]) => [
+      key,
+      {
+        ...definition,
+        scopeRule: definition.scopeRule || cloneDefaults(defaultAssetTypes[key]?.scopeRule || { mode: "user", value: "" }),
+        dimensionRules: definition.dimensionRules || {},
+      },
+    ])
+  );
+}
+
+function inferLegacyPortfolioScope(asset = {}) {
+  if (asset.isCheckingAccount) return { portfolioScope: "investable", scopeNeedsReview: false };
+  if (asset.type === "private_equity" || asset.type === "real_estate") {
+    return { portfolioScope: "total", scopeNeedsReview: false };
+  }
+  if (
+    asset.eligibleForInvestment !== false &&
+    (asset.type === "stock" || asset.type === "bond" || asset.type === "commodity")
+  ) {
+    return { portfolioScope: "financial", scopeNeedsReview: false };
+  }
+  return { portfolioScope: "total", scopeNeedsReview: true };
+}
+
+export function convertV6ToV7(data) {
+  const assetTypes = assetTypesWithScopeRules(data.assetTypes || cloneDefaults(defaultAssetTypes));
+  let snapshots = stableRecordIds(data.snapshots || [], "assets");
+  snapshots = stableRecordIds(snapshots, "liabilities").map((snapshot) => ({
+    ...snapshot,
+    assets: (snapshot.assets || []).map((asset) => normalizeStoredAsset({
+      ...asset,
+      ...inferLegacyPortfolioScope(asset),
+    }, assetTypes)),
+    liabilities: (snapshot.liabilities || []).map((liability) => ({ ...liability, priority: !!liability.priority })),
+    contributions: Number(snapshot.contributions) || 0,
+    withdrawals: Number(snapshot.withdrawals) || 0,
+  }));
+  const latestLiabilities = snapshots[snapshots.length - 1]?.liabilities || data.liabilities || [];
+  return {
+    ...data,
+    version: 7,
+    currency: data.currency || "EUR",
+    assetTypes,
+    liabilityTypes: data.liabilityTypes || cloneDefaults(defaultLiabilityTypes),
+    dimensions: mergeDimensions(data.dimensions),
+    strategy: mergeStrategy(data.strategy),
+    incomeRecords: data.incomeRecords || [],
+    liabilities: latestLiabilities.map((liability) => ({ ...liability, priority: !!liability.priority })),
+    snapshots,
+  };
+}
+
 export function upgradePortfolio(data) {
   if (!data || typeof data !== "object") return DEFAULT_PORTFOLIO;
   let out = { ...data };
@@ -209,17 +266,25 @@ export function upgradePortfolio(data) {
     out = convertV5ToV6(out);
   }
   if (out.version === 6) {
-    const assetTypes = out.assetTypes || cloneDefaults(defaultAssetTypes);
+    out = convertV6ToV7(out);
+  }
+  if (out.version === 7) {
+    const assetTypes = assetTypesWithScopeRules(out.assetTypes || cloneDefaults(defaultAssetTypes));
     let snapshots = stableRecordIds(out.snapshots || [], "assets");
     snapshots = stableRecordIds(snapshots, "liabilities").map((snapshot) => ({
       ...snapshot,
-      assets: (snapshot.assets || []).map((asset) => normalizeAsset(asset, assetTypes)),
+      assets: (snapshot.assets || []).map((asset) => normalizeStoredAsset({
+        ...asset,
+        portfolioScope: validPortfolioScope(asset.portfolioScope) ? asset.portfolioScope : "total",
+        scopeNeedsReview: !!asset.scopeNeedsReview,
+      }, assetTypes)),
       liabilities: (snapshot.liabilities || []).map((liability) => ({ ...liability, priority: !!liability.priority })),
       contributions: Number(snapshot.contributions) || 0,
       withdrawals: Number(snapshot.withdrawals) || 0,
     }));
     out = {
       ...out,
+      version: 7,
       currency: out.currency || "EUR",
       assetTypes,
       liabilityTypes: out.liabilityTypes || cloneDefaults(defaultLiabilityTypes),

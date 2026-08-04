@@ -1,54 +1,71 @@
-# Portfolio Strategy Implementation Milestones
+# Nested Portfolio Views — Implementation Plan
 
-This plan turns [SPEC.md](./SPEC.md) into incremental, testable application changes. A milestone is complete only when its behavior is persisted in the encrypted portfolio file and covered by an appropriate automated or production-build check.
+This plan implements the portfolio-scope additions in [SPEC.md](./SPEC.md). All items are pending. The existing version 6 model is the migration source; the completed version 6 work is not repeated here.
 
-## Milestone 1 — Portfolio model and compatibility
+## Milestone 1 — Version 7 data model and migration
 
-- [x] Introduce portfolio file version 6.
-- [x] Add configurable dimensions, asset-type dimension rules, strategy settings, and annual income records.
-- [x] Extend assets with ownership, valuation, cost-basis, checking-account, investment-eligibility, status, and dimension-exposure fields.
-- [x] Preserve stable asset and liability IDs between snapshots and file reloads.
-- [x] Convert version 5 portfolios without losing snapshots, asset values, liabilities, or allocation targets.
-- [x] Cover the conversion and new calculations with unit tests.
+- [x] Add one `portfolioScope` field to every asset with the allowed values `total`, `investable`, or `financial`.
+- [x] Add an optional `scopeRule` to asset-type definitions using the existing user-selectable, default, and locked rule behavior.
+- [x] Add a temporary `scopeNeedsReview` marker for assets whose scope cannot be inferred safely.
+- [x] Bump the encrypted portfolio file format from version 6 to version 7.
+- [x] Convert version 6 checking accounts to Investable scope.
+- [x] Convert eligible public investments to Financial scope.
+- [x] Convert private equity and real estate to Total-only scope by default.
+- [x] Preserve asset IDs, snapshots, values, dimensions, strategy, income, and simplified liabilities during conversion.
+- [x] Add migration tests for every inference path, ambiguous assets, and repeated upgrades.
 
-## Milestone 2 — Fast monthly check-ins
+## Milestone 2 — Scope calculations and invariants
 
-- [x] Keep at most one snapshot per calendar month.
-- [x] Copy the latest snapshot when starting a later month's check-in.
-- [x] Open the existing snapshot when the current month already exists.
-- [x] Allow direct-value assets and quantity × unit-price assets.
-- [x] Display current value, cost basis, gain/loss, and change since the previous snapshot.
-- [x] Keep historical snapshots visible and protect them from accidental current-entry actions.
+- [x] Add a single helper that determines whether an asset belongs to the Total, Investable, or Financial view.
+- [x] Calculate Total Assets from every active asset.
+- [x] Calculate Total Net Worth as Total Assets minus all liabilities.
+- [x] Calculate Investable Assets from Investable and Financial assets.
+- [x] Calculate the Financial Portfolio from Financial assets only.
+- [x] Keep liabilities out of the Investable and Financial views.
+- [x] Guarantee `Financial Portfolio <= Investable Assets <= Total Assets` without clamping calculated values.
+- [x] Make allocation and concentration calculations accept an explicit portfolio view.
+- [x] Add unit tests for scope inclusion, ownership shares, closed assets, liabilities, and the nested asset relationship.
 
-## Milestone 3 — Asset classification
+## Milestone 3 — Asset and asset-type configuration
 
-- [x] Provide the required dimensions: asset type, liquidity, geography, investment strategy, currency exposure, risk/volatility, custodian, sector, and ownership.
-- [x] Allow dimension values to be configured.
-- [x] Allow simple 100% classifications and optional percentage exposure splits.
-- [x] Support locked, default, user-selected, and not-applicable rules on asset types.
-- [x] Surface missing classifications as Unclassified.
+- [x] Add the shared portfolio-scope selector to the asset add/edit modal.
+- [x] Explain each scope beside the selector using concise examples.
+- [x] Apply asset-type scope defaults when adding an asset or changing its type.
+- [x] Disable scope editing when the selected asset type locks the value.
+- [x] Add scope-rule controls to the asset-type configuration screen.
+- [x] Show a visible review warning on migrated assets marked `scopeNeedsReview`.
+- [x] Clear the review marker after the user explicitly confirms or changes the scope.
+- [x] Preserve the selected scope in every monthly snapshot so later reclassification does not rewrite history.
 
-## Milestone 4 — Strategy and concentration
+## Milestone 4 — Three portfolio views
 
-- [x] Configure each dimension as disabled, informational, target allocation, or limits.
-- [x] Configure target percentages, tolerances, minimums, maximums, and recommendation importance.
-- [x] Display current amount, weight, target/limit, difference, and status for the selected dimension.
-- [x] Show current allocation and historical asset-type composition using base-currency attributable values.
+- [x] Add a primary view selector for Total Net Worth, Investable Assets, and Financial Portfolio.
+- [x] Display the correct headline metric and explanation for each view.
+- [x] Filter the asset table by the selected view while keeping one underlying asset record.
+- [x] Filter allocation charts and concentration tables by the selected view.
+- [x] Keep the simplified liability table visible only where it is relevant to Total Net Worth.
+- [x] Preserve the selected view while navigating monthly snapshots.
+- [x] Add history series for Total Assets, Investable Assets, and Financial Portfolio.
+- [x] Add a combined history comparison for the three nested asset totals.
+- [x] Keep contribution-adjusted Total Net Worth history behavior intact.
 
-## Milestone 5 — Cash reserve and investment guidance
+## Milestone 5 — Strategy and cash-reserve integration
 
-- [x] Configure one aggregate cash-reserve target across checking accounts.
-- [x] Calculate checking-account cash and the investable surplus above the reserve.
-- [x] Restrict recommendations to eligible investments.
-- [x] Allocate the complete surplus using the configured strategy targets and limits.
-- [x] Explain the recommended amounts and show current versus projected weights.
-- [x] Keep the recommendation advisory; it must not mutate the recorded portfolio.
+- [x] Evaluate strategy targets, limits, and recommendation scores against Financial assets only.
+- [x] Require recommendation destinations to have Financial scope and be eligible for additional investment.
+- [x] Calculate the reserve from active Investable or Financial checking accounts.
+- [x] Model surplus movement out of checking accounts and into Financial investments.
+- [x] Verify that a projected transfer leaves Total Assets, Total Net Worth, and Investable Assets unchanged.
+- [x] Verify that the projected Financial Portfolio increases by the allocated surplus.
+- [x] Explain when no Financial asset can accept the surplus without breaking a configured maximum.
+- [x] Update the sample portfolio to demonstrate Total-only, Investable, and Financial assets.
 
-## Milestone 6 — Income, persistence, and delivery
+## Milestone 6 — Verification and delivery
 
-- [x] Record yearly dividends, interest, rent, distributions, other income, fees, repairs, and other costs per asset.
-- [x] Derive gross and net annual income without adding it to portfolio value.
-- [x] Persist all new settings and records in local and Google Drive files.
-- [x] Keep simplified liability tracking unchanged: name, type, value, and priority.
-- [x] Bump the application version.
-- [ ] Run automated tests and build the production site into `docs` using the existing Google credentials. Tests pass; the production build is waiting for the required environment credentials.
+- [x] Add component coverage for scope selectors, locked defaults, view filtering, and migration-review warnings.
+- [x] Run the complete automated test suite.
+- [x] Exercise all three views, asset editing, configuration, history, and cash guidance in a real browser.
+- [x] Confirm Google Drive discovery failure still displays an error and disables Drive operations.
+- [x] Bump the application version after the code change.
+- [ ] Run plain `npm run build` with the existing Google credential environment variables. Blocked: both required variables are absent from this environment.
+- [ ] Commit the regenerated `docs` production site with the implementation changes. Blocked until the credentialed production build can run.
