@@ -1,7 +1,7 @@
 import { useEffect, useRef, useMemo } from "react";
 import { pieColors, formatCurrency, labelFor } from "../utils.js";
 
-export default function StackedAreaChart({ data, assetTypes }) {
+export default function StackedAreaChart({ data, assetTypes, currency = "EUR" }) {
   const canvasRef = useRef(null);
 
   useEffect(() => {
@@ -44,7 +44,7 @@ export default function StackedAreaChart({ data, assetTypes }) {
         )
       );
       const xs = data.map((_, i) => i);
-      const totals = data.map((d) => d.value || 0);
+      const totals = data.map((d) => categories.reduce((sum, category) => sum + (Number(d[category]) || 0), 0));
       const maxY = Math.max(...totals, 0);
       const xToPx = (x) =>
         padding + (x / Math.max(1, xs.length - 1)) * (width - 2 * padding);
@@ -74,7 +74,7 @@ export default function StackedAreaChart({ data, assetTypes }) {
         ctx.moveTo(padding, py);
         ctx.lineTo(padding - 4 * dpr, py);
         ctx.stroke();
-        ctx.fillText(formatCurrency(val), padding - 8 * dpr, py);
+        ctx.fillText(formatCurrency(val, currency), padding - 8 * dpr, py);
       }
 
       ctx.textAlign = "center";
@@ -119,7 +119,7 @@ export default function StackedAreaChart({ data, assetTypes }) {
     draw();
     window.addEventListener("resize", draw);
     return () => window.removeEventListener("resize", draw);
-  }, [data]);
+  }, [data, currency]);
 
   const categories = useMemo(
     () =>

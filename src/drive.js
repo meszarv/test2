@@ -1,4 +1,4 @@
-import { encryptPortfolio, decryptPortfolio, DEFAULT_PORTFOLIO } from "./file.js";
+import { encryptPortfolio, decryptPortfolio, DEFAULT_PORTFOLIO, upgradePortfolio } from "./file.js";
 
 let tokenClient;
 let driveApiKey;
@@ -8,7 +8,15 @@ const DRIVE_FILENAME_KEY = "driveFilename";
 export function initDrive({ apiKey, clientId }) {
   driveApiKey = apiKey;
   return new Promise((resolve) => {
-    gapi.load("client", async () => {
+    if (!globalThis.gapi?.load || !globalThis.google?.accounts?.oauth2) {
+      console.error("Failed to initialize Google Drive: Google API scripts are unavailable");
+      tokenClient = undefined;
+      driveReady = false;
+      resolve(false);
+      return;
+    }
+    try {
+      gapi.load("client", async () => {
       try {
         await gapi.client.init({
           apiKey,
@@ -40,8 +48,14 @@ export function initDrive({ apiKey, clientId }) {
         tokenClient = undefined;
         driveReady = false;
       }
-      resolve();
-    });
+      resolve(driveReady);
+      });
+    } catch (err) {
+      console.error("Failed to initialize Google Drive", err);
+      tokenClient = undefined;
+      driveReady = false;
+      resolve(false);
+    }
   });
 }
 
@@ -101,7 +115,7 @@ export async function readDrivePortfolioFile(fileId, password) {
   });
   const buf = await res.arrayBuffer();
   if (buf.byteLength === 0) return DEFAULT_PORTFOLIO;
-  return await decryptPortfolio(buf, password);
+  return upgradePortfolio(await decryptPortfolio(buf, password));
 }
 
 export async function writeDrivePortfolioFile(fileId, password, data) {

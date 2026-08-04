@@ -11,8 +11,10 @@ export default function useSnapshots({ assets, setAssets, liabilities, setLiabil
       const month = iso.slice(0, 7);
       const snap = {
         asOf: iso,
-        assets: (nextAssets || []).map((a) => ({ ...a })),
+        assets: (nextAssets || []).map((a) => ({ ...a, dimensions: JSON.parse(JSON.stringify(a.dimensions || {})) })),
         liabilities: (nextLiabilities || []).map((l) => ({ ...l })),
+        contributions: 0,
+        withdrawals: 0,
       };
       const existing = prev.findIndex((p) => p.asOf.slice(0, 7) === month);
       let s;
@@ -35,7 +37,7 @@ export default function useSnapshots({ assets, setAssets, liabilities, setLiabil
         i === currentIndex
           ? {
               ...s,
-              assets: (nextAssets || []).map((a) => ({ ...a })),
+              assets: (nextAssets || []).map((a) => ({ ...a, dimensions: JSON.parse(JSON.stringify(a.dimensions || {})) })),
               liabilities: (nextLiabilities || []).map((l) => ({ ...l })),
             }
           : s
@@ -47,7 +49,11 @@ export default function useSnapshots({ assets, setAssets, liabilities, setLiabil
     const snap = snapshots[i];
     if (!snap) return;
     setCurrentIndex(i);
-    setAssets((snap.assets || []).map((a) => ({ ...a, name: a.name || labelFor(a.type, assetTypes) })));
+    setAssets((snap.assets || []).map((a) => ({
+      ...a,
+      dimensions: JSON.parse(JSON.stringify(a.dimensions || {})),
+      name: a.name || labelFor(a.type, assetTypes),
+    })));
     setLiabilities(
       (snap.liabilities || []).map((l) => ({
         ...l,
@@ -76,10 +82,27 @@ export default function useSnapshots({ assets, setAssets, liabilities, setLiabil
     });
   }
 
+  function handleChangeSnapshotCashFlow(i, contributions, withdrawals) {
+    setSnapshots((prev) => prev.map((snapshot, index) => index === i
+      ? {
+          ...snapshot,
+          contributions: Number(contributions) || 0,
+          withdrawals: Number(withdrawals) || 0,
+        }
+      : snapshot));
+  }
+
   function handleDeleteSnapshot(i) {
     setSnapshots((prev) => {
       const next = prev.filter((_, idx) => idx !== i);
-      setCurrentIndex(Math.max(0, i - 1));
+      const nextIndex = Math.max(0, Math.min(i - 1, next.length - 1));
+      setCurrentIndex(nextIndex);
+      const selected = next[nextIndex];
+      setAssets((selected?.assets || []).map((asset) => ({
+        ...asset,
+        dimensions: JSON.parse(JSON.stringify(asset.dimensions || {})),
+      })));
+      setLiabilities((selected?.liabilities || []).map((liability) => ({ ...liability })));
       return next;
     });
   }
@@ -94,6 +117,7 @@ export default function useSnapshots({ assets, setAssets, liabilities, setLiabil
     handleSelectSnapshot,
     handleAddSnapshot,
     handleChangeSnapshotDate,
+    handleChangeSnapshotCashFlow,
     handleDeleteSnapshot,
   };
 }

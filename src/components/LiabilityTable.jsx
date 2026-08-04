@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { formatCurrency } from "../utils.js";
 
-export default function LiabilityTable({ liabilities, prevLiabilities, setLiabilities, liabilityTypes, readOnly = false, onEdit }) {
+export default function LiabilityTable({ liabilities, prevLiabilities, setLiabilities, liabilityTypes, currency = "EUR", readOnly = false, onEdit }) {
   const [sort, setSort] = useState({ key: null, asc: true });
   const prevMap = new Map((prevLiabilities || []).map((l) => [l.id, Number(l.value) || 0]));
 
@@ -95,12 +95,12 @@ export default function LiabilityTable({ liabilities, prevLiabilities, setLiabil
                       <span
                         className={`pointer-events-none absolute inset-0 flex items-center justify-end px-1 ${readOnly ? "" : "peer-focus:hidden"}`}
                       >
-                        {formatCurrency(l.value)}
+                        {formatCurrency(l.value, currency)}
                       </span>
                     </div>
                     {delta ? (
                       <span className={`text-xs ${delta >= 0 ? "text-green-400" : "text-red-400"}`}>
-                        ({formatCurrency(delta)})
+                        ({formatCurrency(delta, currency)})
                       </span>
                     ) : null}
                   </div>

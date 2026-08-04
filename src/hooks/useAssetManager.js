@@ -1,13 +1,13 @@
 import { useState } from "react";
+import { normalizeAsset } from "../data.js";
 import { mkAsset } from "../utils.js";
 
 export default function useAssetManager({ assets, assetTypes, setAssetsAndUpdateSnapshot, setEditAsset }) {
   const [assetToDelete, setAssetToDelete] = useState(null);
 
-  function addAsset({ name, type, description, value }) {
-    const asset = mkAsset(type, assetTypes, name);
-    asset.description = description;
-    asset.value = value;
+  function addAsset(input) {
+    const base = mkAsset(input.type, assetTypes, input.name);
+    const asset = normalizeAsset({ ...base, ...input, id: base.id }, assetTypes);
     setAssetsAndUpdateSnapshot([...assets, asset]);
   }
 

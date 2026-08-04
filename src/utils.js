@@ -1,5 +1,6 @@
 export function mkId() {
-  return crypto.randomUUID();
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  return `id-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 }
 
 export const pieColors = [
@@ -24,7 +25,22 @@ export function mkAsset(type, registry, name = "") {
     type,
     name: name || def.name || type,
     description: "",
+    ownership: "personal",
+    ownershipShare: 100,
+    acquiredOn: "",
+    status: "active",
+    pricingCurrency: "EUR",
+    valuationMode: "total",
+    isCheckingAccount: type === "cash",
+    eligibleForInvestment: type !== "cash",
+    dimensions: {},
+    quantity: 0,
+    unitPrice: 0,
+    fxRate: 1,
     value: 0,
+    costBasis: 0,
+    valuationDate: "",
+    notes: "",
   };
 }
 
@@ -33,14 +49,14 @@ export function stripIds(a) {
   return rest;
 }
 
-export function formatCurrency(n) {
+export function formatCurrency(n, currency = "EUR") {
   try {
     return new Intl.NumberFormat(undefined, {
       style: "currency",
-      currency: "EUR",
+      currency,
       maximumFractionDigits: 0,
     }).format(n);
   } catch {
-    return `${Math.round(n).toLocaleString()} €`;
+    return `${Math.round(Number(n) || 0).toLocaleString()} ${currency}`;
   }
 }

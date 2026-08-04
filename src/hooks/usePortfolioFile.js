@@ -9,7 +9,15 @@ import {
   DEFAULT_PORTFOLIO,
 } from "../file.js";
 import { openDriveFile, readDrivePortfolioFile, writeDrivePortfolioFile } from "../drive.js";
-import { defaultAssetTypes, defaultLiabilityTypes } from "../data.js";
+import {
+  cloneDefaults,
+  defaultAssetTypes,
+  defaultDimensions,
+  defaultLiabilityTypes,
+  defaultStrategy,
+  mergeStrategy,
+  normalizeAsset,
+} from "../data.js";
 import { mkId, labelFor, mkAsset } from "../utils.js";
 
 export default function usePortfolioFile({
@@ -21,8 +29,14 @@ export default function usePortfolioFile({
   setAssetTypes,
   liabilityTypes,
   setLiabilityTypes,
-  allocation,
-  setAllocation,
+  currency,
+  setCurrency,
+  dimensions,
+  setDimensions,
+  strategy,
+  setStrategy,
+  incomeRecords,
+  setIncomeRecords,
   snapshots,
   setSnapshots,
   snapshotFromAssets,
@@ -62,7 +76,7 @@ export default function usePortfolioFile({
       return;
     }
     setDirty(true);
-  }, [assetTypes, liabilityTypes, allocation, snapshots]);
+  }, [assetTypes, liabilityTypes, currency, dimensions, strategy, incomeRecords, snapshots]);
 
   async function handleOpenExisting() {
     try {
@@ -94,12 +108,19 @@ export default function usePortfolioFile({
     setLoading(true);
     setError(null);
     try {
-      const types = Object.keys(defaultAssetTypes);
-      const sampleAssets = Array.from({ length: 5 }, (_, i) => {
-        const t = types[Math.floor(Math.random() * types.length)];
-        const a = mkAsset(t, defaultAssetTypes, `Sample ${i + 1}`);
-        a.value = Math.round(Math.random() * 50000);
-        return a;
+      const examples = [
+        ["cash", "Main checking account", 25000],
+        ["stock", "Global equity ETF", 60000],
+        ["bond", "Government bond ETF", 20000],
+        ["real_estate", "Rental property", 100000],
+        ["commodity", "Gold ETC", 10000],
+      ];
+      const sampleAssets = examples.map(([t, name, value]) => {
+        const a = mkAsset(t, defaultAssetTypes, name);
+        a.value = value;
+        a.costBasis = t === "cash" ? value : Math.round(value * 0.8);
+        a.eligibleForInvestment = t !== "cash" && t !== "real_estate";
+        return normalizeAsset(a, defaultAssetTypes);
       });
       const sampleSnapshots = [];
       const now = new Date();
@@ -114,7 +135,27 @@ export default function usePortfolioFile({
       }
       setAssetTypes(defaultAssetTypes);
       setLiabilityTypes(defaultLiabilityTypes);
-      setAllocation({});
+      setCurrency("EUR");
+      setDimensions(cloneDefaults(defaultDimensions));
+      setStrategy(mergeStrategy({
+        cashReserveTarget: 10000,
+        dimensionPolicies: {
+          asset_type: {
+            mode: "target",
+            tolerance: 2,
+            importance: 3,
+            categories: {
+              cash: { target: 10 },
+              real_estate: { target: 25 },
+              stock: { target: 45 },
+              private_equity: { target: 5 },
+              bond: { target: 10 },
+              commodity: { target: 5 },
+            },
+          },
+        },
+      }));
+      setIncomeRecords([]);
       setSnapshots(sampleSnapshots);
       setAssets(sampleSnapshots[sampleSnapshots.length - 1].assets);
       setLiabilities([]);
@@ -161,11 +202,11 @@ export default function usePortfolioFile({
       const at = data.assetTypes || defaultAssetTypes;
       const lt = data.liabilityTypes || defaultLiabilityTypes;
       if (latest) {
-        setAssets((latest.assets || []).map((a) => ({ ...a, id: mkId(), name: a.name || labelFor(a.type, at) })));
+        setAssets((latest.assets || []).map((a) => normalizeAsset({ ...a, id: a.id || mkId(), name: a.name || labelFor(a.type, at) }, at)));
         setLiabilities(
           (latest.liabilities || []).map((l) => ({
             ...l,
-            id: mkId(),
+            id: l.id || mkId(),
             name: l.name || labelFor(l.type, lt),
             priority: !!l.priority,
           }))
@@ -174,7 +215,10 @@ export default function usePortfolioFile({
       } else {
         snapshotFromAssets(assets, liabilities);
       }
-      setAllocation(data.allocation || {});
+      setCurrency(data.currency || "EUR");
+      setDimensions(data.dimensions || cloneDefaults(defaultDimensions));
+      setStrategy(data.strategy || cloneDefaults(defaultStrategy));
+      setIncomeRecords(data.incomeRecords || []);
       setAssetTypes(at);
       setLiabilityTypes(lt);
       setStep("main");
@@ -195,7 +239,17 @@ export default function usePortfolioFile({
   }
 
   function buildPortfolioData() {
-    return { ...DEFAULT_PORTFOLIO, assetTypes, liabilityTypes, allocation, snapshots, liabilities };
+    return {
+      ...DEFAULT_PORTFOLIO,
+      currency,
+      assetTypes,
+      liabilityTypes,
+      dimensions,
+      strategy,
+      incomeRecords,
+      snapshots,
+      liabilities,
+    };
   }
 
   async function withLoading(fn) {
@@ -246,7 +300,10 @@ export default function usePortfolioFile({
       setAssets([]);
       setLiabilities([]);
       snapshotFromAssets([], []);
-      setAllocation({});
+      setCurrency(DEFAULT_PORTFOLIO.currency);
+      setDimensions(cloneDefaults(defaultDimensions));
+      setStrategy(cloneDefaults(defaultStrategy));
+      setIncomeRecords([]);
       setAssetTypes(defaultAssetTypes);
       setLiabilityTypes(defaultLiabilityTypes);
       setStep("pick");

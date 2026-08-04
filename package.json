@@ -1,13 +1,13 @@
 {
   "name": "test2",
-  "version": "1.0.56",
+  "version": "1.0.57",
   "description": "",
   "scripts": {
     "dev": "vite",
     "prebuild": "node scripts/check-env.js",
     "build": "node scripts/build.js",
     "preview": "vite preview",
-    "test": "node --test",
+    "test": "node --test --loader ./scripts/jsx-loader.mjs",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d docs"
   },

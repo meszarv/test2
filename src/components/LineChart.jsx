@@ -3,6 +3,7 @@ import { formatCurrency } from "../utils.js";
 
 export default function LineChart({
   data,
+  currency = "EUR",
   showGridlines = true,
   showVerticalGridlines = false,
   showMarkers = true,
@@ -127,7 +128,7 @@ export default function LineChart({
         ctx.moveTo(padding, py);
         ctx.lineTo(padding - tickLen, py);
         ctx.stroke();
-        ctx.fillText(formatCurrency(val), padding - 2 * tickLen, py);
+        ctx.fillText(formatCurrency(val, currency), padding - 2 * tickLen, py);
       }
 
       // x-axis ticks and labels
@@ -173,7 +174,7 @@ export default function LineChart({
       const ly = yToPx(ys[ys.length - 1]);
       ctx.fillStyle = "#e8eaed";
       ctx.font = `${12 * dpr}px ui-sans-serif`;
-      ctx.fillText(`${last.label}: ${formatCurrency(last.value)}`, lx - 100 * dpr, ly - 8 * dpr);
+      ctx.fillText(`${last.label}: ${formatCurrency(last.value, currency)}`, lx - 100 * dpr, ly - 8 * dpr);
 
       if (hoverIdx != null && points[hoverIdx]) {
         const p = points[hoverIdx];
@@ -183,7 +184,7 @@ export default function LineChart({
         ctx.fill();
 
         if (tooltipRef.current) {
-          tooltipRef.current.textContent = `${p.label}: ${formatCurrency(p.value)}`;
+          tooltipRef.current.textContent = `${p.label}: ${formatCurrency(p.value, currency)}`;
           tooltipRef.current.style.display = "block";
           tooltipRef.current.style.left = `${p.x / dpr + 8}px`;
           tooltipRef.current.style.top = `${p.y / dpr - 24}px`;
@@ -230,7 +231,7 @@ export default function LineChart({
       canvas.removeEventListener("mousemove", handleMove);
       canvas.removeEventListener("mouseout", handleOut);
     };
-  }, [data, showGridlines, showVerticalGridlines, showMarkers]);
+  }, [data, currency, showGridlines, showVerticalGridlines, showMarkers]);
 
   return (
     <div className="relative">

@@ -2,9 +2,20 @@ import React, { useState } from "react";
 import TextInput from "./TextInput.jsx";
 import ConfirmModal from "./ConfirmModal.jsx";
 
-export default function SnapshotTabs({ snapshots, currentIndex, onSelect, onAdd, onChangeDate, onDelete }) {
+export default function SnapshotTabs({
+  snapshots,
+  currentIndex,
+  onSelect,
+  onAdd,
+  onChangeDate,
+  onChangeCashFlow,
+  onDelete,
+  currency = "EUR",
+}) {
   const [editIndex, setEditIndex] = useState(null);
   const [editValue, setEditValue] = useState("");
+  const [contributions, setContributions] = useState("");
+  const [withdrawals, setWithdrawals] = useState("");
   const [deleteIndex, setDeleteIndex] = useState(null);
 
   const fmt = (d) => d.toLocaleString("default", { month: "short", year: "numeric" });
@@ -15,6 +26,8 @@ export default function SnapshotTabs({ snapshots, currentIndex, onSelect, onAdd,
     if (!snap) return;
     const val = new Date(snap.asOf).toISOString().slice(0, 7);
     setEditValue(val);
+    setContributions(String(snap.contributions || ""));
+    setWithdrawals(String(snap.withdrawals || ""));
     setEditIndex(idx);
   }
 
@@ -22,6 +35,7 @@ export default function SnapshotTabs({ snapshots, currentIndex, onSelect, onAdd,
     const [y, m] = editValue.split("-");
     const date = new Date(Number(y), Number(m) - 1, 1);
     onChangeDate(editIndex, date);
+    if (onChangeCashFlow) onChangeCashFlow(editIndex, contributions, withdrawals);
     setEditIndex(null);
   }
 
@@ -34,10 +48,8 @@ export default function SnapshotTabs({ snapshots, currentIndex, onSelect, onAdd,
           .map(({ s, i }) => (
             <button
               key={s.asOf}
-              onClick={(e) => {
-                if (e.detail === 3) startEdit(i);
-                else onSelect(i);
-              }}
+              onClick={() => onSelect(i)}
+              onDoubleClick={() => startEdit(i)}
               className={`px-3 py-1 rounded-t border border-zinc-700 ${
                 i === currentIndex ? "bg-zinc-800 border-b-zinc-950" : "bg-zinc-900 hover:bg-zinc-800"
               }`}
@@ -68,6 +80,23 @@ export default function SnapshotTabs({ snapshots, currentIndex, onSelect, onAdd,
                 if (e.key === "Enter") saveDate();
               }}
             />
+            <div className="grid grid-cols-2 gap-3">
+              <TextInput
+                label={`External contributions (${currency})`}
+                type="number"
+                value={contributions}
+                onChange={setContributions}
+              />
+              <TextInput
+                label={`External withdrawals (${currency})`}
+                type="number"
+                value={withdrawals}
+                onChange={setWithdrawals}
+              />
+            </div>
+            <p className="text-xs text-zinc-500">
+              Optional totals used to separate portfolio growth from money added or withdrawn.
+            </p>
             <div className="flex justify-between gap-2 pt-2">
               <button
                 onClick={() => setDeleteIndex(editIndex)}

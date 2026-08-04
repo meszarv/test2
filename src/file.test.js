@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { webcrypto } from 'node:crypto';
 import { upgradePortfolio, DEFAULT_PORTFOLIO, readPortfolioFile, writePortfolioFile } from './file.js';
 import { netWorth } from './data.js';
+
+if (!globalThis.crypto) globalThis.crypto = webcrypto;
 
 test('netWorth subtracts liabilities from assets', () => {
   const assets = [{ value: 100 }, { value: 50 }];
@@ -13,7 +16,7 @@ test('upgradePortfolio adds currency and bumps version', () => {
   const old = { version: 1, assetTypes: {}, allocation: {}, snapshots: [] };
   const upgraded = upgradePortfolio(old);
   assert.equal(upgraded.version, DEFAULT_PORTFOLIO.version);
-  assert.equal(upgraded.currency, DEFAULT_PORTFOLIO.currency);
+  assert.equal(upgraded.currency, 'USD');
 });
 
 test('upgradePortfolio adds liabilities and bumps version from v2', () => {
@@ -99,4 +102,26 @@ test('upgradePortfolio adds priority to liabilities from v4', () => {
   assert.equal(upgraded.version, DEFAULT_PORTFOLIO.version);
   assert.equal(upgraded.liabilities[0].priority, false);
   assert.equal(upgraded.snapshots[0].liabilities[0].priority, false);
+});
+
+test('upgradePortfolio converts v5 allocation and asset observations to v6', () => {
+  const old = {
+    version: 5,
+    currency: 'EUR',
+    assetTypes: { cash: { name: 'Cash' }, stock: { name: 'Stock' } },
+    liabilityTypes: {},
+    allocation: { cash: 20, stock: 80 },
+    liabilities: [],
+    snapshots: [
+      { asOf: '2025-01-15T00:00:00.000Z', assets: [{ name: 'Broker ETF', type: 'stock', value: 100 }], liabilities: [] },
+      { asOf: '2025-02-15T00:00:00.000Z', assets: [{ name: 'Broker ETF', type: 'stock', value: 120 }], liabilities: [] },
+    ],
+  };
+  const upgraded = upgradePortfolio(old);
+  assert.equal(upgraded.version, 6);
+  assert.equal(upgraded.strategy.dimensionPolicies.asset_type.mode, 'target');
+  assert.equal(upgraded.strategy.dimensionPolicies.asset_type.categories.stock.target, 80);
+  assert.equal(upgraded.snapshots[0].assets[0].id, upgraded.snapshots[1].assets[0].id);
+  assert.equal(upgraded.snapshots[1].assets[0].ownershipShare, 100);
+  assert.deepEqual(upgraded.incomeRecords, []);
 });

@@ -1,28 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import React from 'react';
-import { createRequire } from 'module';
-import Module from 'module';
-import { readFileSync } from 'node:fs';
-import { transformSync } from '@babel/core';
-import presetReact from '@babel/preset-react';
-import transformModules from '@babel/plugin-transform-modules-commonjs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { JSDOM } from 'jsdom';
 import { createRoot } from 'react-dom/client';
 import TestUtils from 'react-dom/test-utils';
+import LiabilityTypeManager from './LiabilityTypeManager.jsx';
 const { act } = TestUtils;
-
-Module._extensions['.jsx'] = (mod, filename) => {
-  const src = readFileSync(filename, 'utf8');
-  const { code } = transformSync(src, {
-    presets: [[presetReact, { runtime: 'automatic' }]],
-    plugins: [transformModules],
-    filename,
-  });
-  mod._compile(code, filename);
-};
-const require = createRequire(import.meta.url);
 
 function render(component, props) {
   return renderToStaticMarkup(React.createElement(component, props));
@@ -38,7 +22,6 @@ function setupDom() {
 }
 
 test('LiabilityTypeManager renders and reflects renamed types', () => {
-  const LiabilityTypeManager = require('./LiabilityTypeManager.jsx').default;
   const initial = { loan: { name: 'Loan' } };
   const markup1 = render(LiabilityTypeManager, { liabilityTypes: initial, setLiabilityTypes: () => {}, liabilities: [] });
   assert.match(markup1, /Loan/);
@@ -49,7 +32,6 @@ test('LiabilityTypeManager renders and reflects renamed types', () => {
 
 test('LiabilityTypeManager can add types', async () => {
   const dom = setupDom();
-  const LiabilityTypeManager = require('./LiabilityTypeManager.jsx').default;
   const container = document.createElement('div');
   document.body.appendChild(container);
   let updated = null;
@@ -75,7 +57,6 @@ test('LiabilityTypeManager can add types', async () => {
 
 test('LiabilityTypeManager prevents removing types in use', async () => {
   const dom = setupDom();
-  const LiabilityTypeManager = require('./LiabilityTypeManager.jsx').default;
   const container = document.createElement('div');
   document.body.appendChild(container);
   let called = false;

@@ -4,13 +4,7 @@ import { JSDOM } from 'jsdom';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { act } from 'react-dom/test-utils';
-import { createRequire } from 'module';
-
-const require = createRequire(import.meta.url);
-require('@babel/register')({
-  extensions: ['.js', '.jsx'],
-  presets: [['@babel/preset-react', { runtime: 'automatic' }]],
-});
+import LineChart from './LineChart.jsx';
 
 function setupDom() {
   const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'http://localhost' });
@@ -22,7 +16,6 @@ function setupDom() {
 }
 
 test('renders with all-positive series', async () => {
-  const LineChart = require('./LineChart.jsx').default;
   setupDom();
   const container = document.createElement('div');
   document.body.appendChild(container);
@@ -38,7 +31,6 @@ test('renders with all-positive series', async () => {
 });
 
 test('renders with all-negative series', async () => {
-  const LineChart = require('./LineChart.jsx').default;
   setupDom();
   const container = document.createElement('div');
   document.body.appendChild(container);

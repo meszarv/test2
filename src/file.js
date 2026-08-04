@@ -1,4 +1,13 @@
-import { defaultAssetTypes, defaultLiabilityTypes } from "./data.js";
+import {
+  cloneDefaults,
+  defaultAssetTypes,
+  defaultDimensions,
+  defaultLiabilityTypes,
+  defaultStrategy,
+  mergeDimensions,
+  mergeStrategy,
+  normalizeAsset,
+} from "./data.js";
 
 const DB_NAME = "portfolio-tracker-db";
 const STORE = "handles";
@@ -100,14 +109,73 @@ export async function decryptPortfolio(buf, password) {
 }
 
 export const DEFAULT_PORTFOLIO = {
-  version: 5,
-  currency: "USD",
-  assetTypes: defaultAssetTypes,
-  liabilityTypes: defaultLiabilityTypes,
-  allocation: {},
+  version: 6,
+  currency: "EUR",
+  assetTypes: cloneDefaults(defaultAssetTypes),
+  liabilityTypes: cloneDefaults(defaultLiabilityTypes),
+  dimensions: cloneDefaults(defaultDimensions),
+  strategy: cloneDefaults(defaultStrategy),
+  incomeRecords: [],
   liabilities: [],
   snapshots: [],
 };
+
+function stableRecordIds(snapshots, kind) {
+  const known = new Map();
+  let counter = 0;
+  return (snapshots || []).map((snapshot) => {
+    const occurrences = new Map();
+    const records = (snapshot[kind] || []).map((record) => {
+      const fingerprint = `${record.type || ""}\u0000${record.name || ""}\u0000${record.description || ""}`;
+      const occurrence = occurrences.get(fingerprint) || 0;
+      occurrences.set(fingerprint, occurrence + 1);
+      const lookup = `${fingerprint}\u0000${occurrence}`;
+      let id = record.id || known.get(lookup);
+      if (!id) {
+        counter += 1;
+        id = `${kind === "assets" ? "asset" : "liability"}-${counter}`;
+      }
+      known.set(lookup, id);
+      return { ...record, id };
+    });
+    return { ...snapshot, [kind]: records };
+  });
+}
+
+export function convertV5ToV6(data) {
+  const assetTypes = Object.fromEntries(
+    Object.entries(data.assetTypes || defaultAssetTypes).map(([key, definition]) => [
+      key,
+      { ...definition, dimensionRules: definition.dimensionRules || {} },
+    ])
+  );
+  let snapshots = stableRecordIds(data.snapshots || [], "assets");
+  snapshots = stableRecordIds(snapshots, "liabilities").map((snapshot) => ({
+    ...snapshot,
+    assets: (snapshot.assets || []).map((asset) => normalizeAsset(asset, assetTypes)),
+    liabilities: (snapshot.liabilities || []).map((liability) => ({
+      ...liability,
+      value: Number(liability.value) || 0,
+      priority: !!liability.priority,
+    })),
+    contributions: Number(snapshot.contributions) || 0,
+    withdrawals: Number(snapshot.withdrawals) || 0,
+  }));
+  const latestLiabilities = snapshots[snapshots.length - 1]?.liabilities || data.liabilities || [];
+  const { allocation: legacyAllocation, ...rest } = data;
+  return {
+    ...rest,
+    version: 6,
+    currency: data.currency || "EUR",
+    assetTypes,
+    liabilityTypes: data.liabilityTypes || cloneDefaults(defaultLiabilityTypes),
+    dimensions: mergeDimensions(data.dimensions),
+    strategy: mergeStrategy(data.strategy, legacyAllocation),
+    incomeRecords: data.incomeRecords || [],
+    liabilities: latestLiabilities.map((liability) => ({ ...liability, priority: !!liability.priority })),
+    snapshots,
+  };
+}
 
 export function upgradePortfolio(data) {
   if (!data || typeof data !== "object") return DEFAULT_PORTFOLIO;
@@ -135,6 +203,31 @@ export function upgradePortfolio(data) {
         liabilities: (s.liabilities || []).map((l) => ({ priority: false, ...l })),
       })),
       version: 5,
+    };
+  }
+  if (out.version === 5) {
+    out = convertV5ToV6(out);
+  }
+  if (out.version === 6) {
+    const assetTypes = out.assetTypes || cloneDefaults(defaultAssetTypes);
+    let snapshots = stableRecordIds(out.snapshots || [], "assets");
+    snapshots = stableRecordIds(snapshots, "liabilities").map((snapshot) => ({
+      ...snapshot,
+      assets: (snapshot.assets || []).map((asset) => normalizeAsset(asset, assetTypes)),
+      liabilities: (snapshot.liabilities || []).map((liability) => ({ ...liability, priority: !!liability.priority })),
+      contributions: Number(snapshot.contributions) || 0,
+      withdrawals: Number(snapshot.withdrawals) || 0,
+    }));
+    out = {
+      ...out,
+      currency: out.currency || "EUR",
+      assetTypes,
+      liabilityTypes: out.liabilityTypes || cloneDefaults(defaultLiabilityTypes),
+      dimensions: out.dimensions || cloneDefaults(defaultDimensions),
+      strategy: mergeStrategy(out.strategy),
+      incomeRecords: out.incomeRecords || [],
+      liabilities: out.liabilities || [],
+      snapshots,
     };
   }
   return out;

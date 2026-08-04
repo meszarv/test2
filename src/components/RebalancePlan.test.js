@@ -4,13 +4,9 @@ import { JSDOM } from 'jsdom';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { act } from 'react-dom/test-utils';
-import { createRequire } from 'module';
-
-const require = createRequire(import.meta.url);
-require('@babel/register')({ extensions: ['.js', '.jsx'], presets: ['@babel/preset-react'] });
+import RebalancePlan from './RebalancePlan.jsx';
 
 test('priority debt appears negative and sorts before assets', async () => {
-  const RebalancePlan = require('./RebalancePlan.jsx').default;
   const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'http://localhost' });
   global.window = dom.window;
   global.document = dom.window.document;
@@ -47,7 +43,6 @@ test('priority debt appears negative and sorts before assets', async () => {
 });
 
 test('priority payoff appears only in invest column', async () => {
-  const RebalancePlan = require('./RebalancePlan.jsx').default;
   const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'http://localhost' });
   global.window = dom.window;
   global.document = dom.window.document;
@@ -84,7 +79,6 @@ test('priority payoff appears only in invest column', async () => {
 });
 
 test('after column reflects post-investment balances', async () => {
-  const RebalancePlan = require('./RebalancePlan.jsx').default;
   const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'http://localhost' });
   global.window = dom.window;
   global.document = dom.window.document;

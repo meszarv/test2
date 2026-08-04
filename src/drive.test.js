@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { webcrypto } from 'node:crypto';
 import { initDrive, openDriveFile, readDrivePortfolioFile } from './drive.js';
 import { DEFAULT_PORTFOLIO } from './file.js';
+
+if (!globalThis.crypto) globalThis.crypto = webcrypto;
 
 test('initDrive initializes gapi client and token client', async () => {
   let initArgs;
