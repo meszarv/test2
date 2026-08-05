@@ -12,6 +12,7 @@ function setupDom() {
   global.document = dom.window.document;
   global.navigator = { userAgent: 'node.js' };
   global.HTMLElement = dom.window.HTMLElement;
+  global.HTMLElement.prototype.attachEvent = () => {};
   return dom;
 }
 
@@ -46,7 +47,6 @@ test('DimensionManager sorts values and protects referenced values', async () =>
 test('DimensionManager adds a value to the selected dimension', async () => {
   const dom = setupDom();
   let updated;
-  window.prompt = () => 'Asia';
   const root = createRoot(document.getElementById('root'));
   await act(async () => root.render(React.createElement(DimensionManager, {
     dimensions: { geography: { name: 'Geography', values: {} } },
@@ -54,8 +54,11 @@ test('DimensionManager adds a value to the selected dimension', async () => {
     assetTypes: {},
     assets: [],
     strategy: { dimensionPolicies: {} },
+    initialNewValue: 'Asia',
   })));
   await act(async () => document.querySelector('button[title="Add value"]').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })));
+  const addButton = Array.from(document.querySelectorAll('button')).find((button) => button.textContent.trim() === 'Add');
+  await act(async () => addButton.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })));
   assert.ok(Object.values(updated.geography.values).some((value) => value.name === 'Asia'));
   root.unmount();
   dom.window.close();

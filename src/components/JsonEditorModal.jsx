@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
+import Modal from "./Modal.jsx";
 
 export default function JsonEditorModal({ open, onClose, data, onSave }) {
   const [text, setText] = useState("");
+  const [original, setOriginal] = useState("");
 
   useEffect(() => {
-    if (open) {
-      setText(JSON.stringify(data, null, 2));
-    }
+    if (!open) return;
+    const next = JSON.stringify(data, null, 2);
+    setText(next);
+    setOriginal(next);
   }, [open, data]);
 
   let valid = true;
@@ -16,44 +19,27 @@ export default function JsonEditorModal({ open, onClose, data, onSave }) {
     valid = false;
   }
 
-  function handleSave() {
+  function handleSave(event) {
+    event.preventDefault();
     if (!valid) return;
-    const parsed = JSON.parse(text);
-    onSave(parsed);
+    onSave(JSON.parse(text));
     onClose();
   }
 
-  if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-      <div className="bg-zinc-900 rounded-xl p-4 w-full max-w-3xl space-y-3">
-        <h2 className="text-lg font-medium">Edit JSON</h2>
-        <textarea
-          className="w-full h-64 rounded-lg bg-zinc-900 border border-zinc-800 px-3 py-2 text-zinc-100 font-mono text-sm"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-        />
-        {!valid && <div className="text-red-500 text-sm">Invalid JSON</div>}
-        <div className="flex justify-end gap-2 pt-2">
-          <button
-            type="button"
-            onClick={onClose}
-            title="Close"
-            className="px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 hover:bg-zinc-700"
-          >
-            ✖
-          </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            title="Save"
-            disabled={!valid}
-            className={`px-3 py-2 rounded-lg ${valid ? "bg-blue-600 hover:bg-blue-500" : "bg-zinc-700 text-zinc-400 cursor-not-allowed"}`}
-          >
-            💾
-          </button>
-        </div>
-      </div>
-    </div>
+    <Modal
+      open={open}
+      title="Edit portfolio JSON"
+      description="Advanced: invalid structural changes can make the portfolio unreadable."
+      onClose={onClose}
+      dirty={text !== original}
+      onSubmit={handleSave}
+      size="max-w-4xl"
+      zIndex="z-[60]"
+      primaryAction={<button type="submit" disabled={!valid} className="rounded-lg bg-blue-600 px-4 py-2 text-sm hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40">Save JSON</button>}
+    >
+      <textarea autoFocus className="h-[55vh] w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 font-mono text-sm text-zinc-100" value={text} onChange={(event) => setText(event.target.value)} />
+      {!valid && <div className="mt-2 text-sm text-red-400">Invalid JSON. Correct the syntax before saving.</div>}
+    </Modal>
   );
 }

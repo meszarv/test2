@@ -1,4 +1,4 @@
-import TextInput from "./TextInput.jsx";
+import { PercentageInput } from "./NumberInput.jsx";
 
 export default function DimensionExposureEditor({ definition, value = {}, rule, onChange }) {
   if (rule?.mode === "na") {
@@ -20,7 +20,7 @@ export default function DimensionExposureEditor({ definition, value = {}, rule, 
   }
 
   function updatePercentage(category, percentage) {
-    onChange({ ...value, [category]: Number(percentage) || 0 });
+    onChange({ ...value, [category]: percentage });
   }
 
   function addExposure() {
@@ -52,9 +52,8 @@ export default function DimensionExposureEditor({ definition, value = {}, rule, 
               ))}
             </select>
           </label>
-          <TextInput
+          <PercentageInput
             label="Exposure %"
-            type="number"
             value={String(percentage)}
             onChange={(next) => updatePercentage(category, next)}
             disabled={locked}

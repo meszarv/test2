@@ -14,6 +14,7 @@ function setupDom() {
   global.document = dom.window.document;
   global.navigator = { userAgent: 'node.js' };
   global.HTMLElement = dom.window.HTMLElement;
+  global.HTMLElement.prototype.attachEvent = () => {};
   return dom;
 }
 
@@ -52,15 +53,17 @@ test('AssetTypeManager keeps the selected type visible when search has no matche
 test('AssetTypeManager adds a type and selects it', async () => {
   const dom = setupDom();
   let updated;
-  window.prompt = () => 'Crypto';
   const root = createRoot(document.getElementById('root'));
   await act(async () => root.render(React.createElement(AssetTypeManager, {
     assetTypes: { cash: cloneDefaults(defaultAssetTypes.cash) },
     setAssetTypes: (value) => { updated = value; },
     assets: [],
     dimensions: cloneDefaults(defaultDimensions),
+    initialNewName: 'Crypto',
   })));
   await act(async () => document.querySelector('button[title="Add type"]').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })));
+  const addButton = Array.from(document.querySelectorAll('button')).find((button) => button.textContent.trim() === 'Add');
+  await act(async () => addButton.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })));
   assert.ok(Object.values(updated).some((type) => type.name === 'Crypto'));
   root.unmount();
   dom.window.close();

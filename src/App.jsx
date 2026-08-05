@@ -5,6 +5,7 @@ import AddLiabilityModal from "./components/AddLiabilityModal.jsx";
 import AssetTable from "./components/AssetTable.jsx";
 import ConcentrationPanel from "./components/ConcentrationPanel.jsx";
 import ConfigPage from "./components/ConfigPage.jsx";
+import ClosePortfolioModal from "./components/ClosePortfolioModal.jsx";
 import ConfirmModal from "./components/ConfirmModal.jsx";
 import EditAssetModal from "./components/EditAssetModal.jsx";
 import EditLiabilityModal from "./components/EditLiabilityModal.jsx";
@@ -19,6 +20,7 @@ import ScopeHistoryChart from "./components/ScopeHistoryChart.jsx";
 import StackedAreaChart from "./components/StackedAreaChart.jsx";
 import SurplusPlan from "./components/SurplusPlan.jsx";
 import TextInput from "./components/TextInput.jsx";
+import UndoToast from "./components/UndoToast.jsx";
 import {
   assetInPortfolioView,
   assetValue,
@@ -65,6 +67,7 @@ export default function App() {
   const [editLiability, setEditLiability] = useState(null);
   const [showTarget, setShowTarget] = useState(false);
   const [jsonOpen, setJsonOpen] = useState(false);
+  const [closePortfolioOpen, setClosePortfolioOpen] = useState(false);
 
   const driveApiKey = import.meta.env.VITE_GOOGLE_API_KEY;
   const driveClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
@@ -98,6 +101,7 @@ export default function App() {
     handleChangeSnapshotDate,
     handleChangeSnapshotCashFlow,
     handleDeleteSnapshot,
+    handleRestoreSnapshot,
   } = useSnapshots({ assets, setAssets, liabilities, setLiabilities, assetTypes, liabilityTypes });
 
   const {
@@ -111,6 +115,8 @@ export default function App() {
     error,
     setError,
     dirty,
+    lastSavedAt,
+    canSave,
     handleOpenExisting,
     handleCreateNew,
     handleOpenDrive,
@@ -148,6 +154,9 @@ export default function App() {
     assetToDelete,
     confirmDeleteAsset,
     cancelDeleteAsset,
+    deletedAsset,
+    undoDeleteAsset,
+    clearDeletedAsset,
   } = useAssetManager({ assets, assetTypes, setAssetsAndUpdateSnapshot, setEditAsset });
 
   const {
@@ -157,6 +166,9 @@ export default function App() {
     liabilityToDelete,
     confirmDeleteLiability,
     cancelDeleteLiability,
+    deletedLiability,
+    undoDeleteLiability,
+    clearDeletedLiability,
   } = useLiabilityManager({ assets, liabilities, liabilityTypes, setAssetsAndUpdateSnapshot, setEditLiability });
 
   useEffect(() => {
@@ -253,6 +265,25 @@ export default function App() {
     investable: "Accessible capital that can be invested or rebalanced.",
     financial: "Assets actively managed under your investment strategy.",
   };
+  const referencedCurrencies = Array.from(new Set([
+    currency,
+    ...snapshots.flatMap((snapshot) => (snapshot.assets || []).map((asset) => asset.pricingCurrency)).filter(Boolean),
+  ]));
+
+  function requestClosePortfolio() {
+    if (dirty) setClosePortfolioOpen(true);
+    else handleCloseFile({ save: false });
+  }
+
+  async function saveAndClosePortfolio() {
+    const result = await handleCloseFile({ save: true });
+    if (result !== false) setClosePortfolioOpen(false);
+  }
+
+  async function discardAndClosePortfolio() {
+    const result = await handleCloseFile({ save: false });
+    if (result !== false) setClosePortfolioOpen(false);
+  }
 
   function updateVisibleAssets(nextVisibleAssets) {
     const updates = new Map(nextVisibleAssets.map((asset) => [asset.id, asset]));
@@ -264,10 +295,11 @@ export default function App() {
       {step === "pick" && (
         <div className="min-h-screen flex flex-col items-center justify-center p-6 gap-4">
           {error && <div className="max-w-lg p-3 rounded-xl bg-red-900/30 border border-red-800 text-red-200">{error}</div>}
-          <button onClick={handleOpenExisting} className="h-12 px-6 rounded-lg bg-blue-600 hover:bg-blue-500">Open existing file</button>
-          <button onClick={handleCreateNew} className="h-12 px-6 rounded-lg bg-blue-600 hover:bg-blue-500">Create new file</button>
-          {driveAvailable && <button onClick={handleOpenDrive} className="h-12 px-6 rounded-lg bg-blue-600 hover:bg-blue-500">Open from Google Drive</button>}
-          <button onClick={handleOpenSample} className="text-sm text-blue-400 underline">Open sample portfolio</button>
+          {loading && <div className="text-sm text-zinc-400">Opening portfolio…</div>}
+          <button disabled={loading} onClick={handleOpenExisting} className="h-12 px-6 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50">Open existing file</button>
+          <button disabled={loading} onClick={handleCreateNew} className="h-12 px-6 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50">Create new file</button>
+          {driveAvailable && <button disabled={loading} onClick={handleOpenDrive} className="h-12 px-6 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50">Open from Google Drive</button>}
+          <button disabled={loading} onClick={handleOpenSample} className="text-sm text-blue-400 underline disabled:opacity-50">Open sample portfolio</button>
           {builtAgo && <div className="text-sm text-zinc-400">Built {builtAgo}</div>}
         </div>
       )}
@@ -277,8 +309,8 @@ export default function App() {
           {error && <div className="text-red-400">{error}</div>}
           <TextInput label="Password" type="password" value={password} onChange={setPassword} className="w-full" autoFocus />
           <div className="flex justify-between">
-            <button type="button" onClick={() => { setFileHandle(null); setPassword(""); setError(null); setStep("pick"); }} className="h-10 px-3 rounded-lg bg-zinc-800 border border-zinc-700 hover:bg-zinc-700">Cancel</button>
-            <button type="submit" className="h-10 px-3 rounded-lg bg-zinc-800 border border-zinc-700 hover:bg-zinc-700">Open</button>
+            <button type="button" disabled={loading} onClick={() => { setFileHandle(null); setPassword(""); setError(null); setStep("pick"); }} className="h-10 px-3 rounded-lg bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 disabled:opacity-50">Cancel</button>
+            <button type="submit" disabled={loading || !password} className="h-10 px-3 rounded-lg bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50">{loading ? "Opening…" : "Open"}</button>
           </div>
         </form>
       )}
@@ -291,11 +323,14 @@ export default function App() {
                 <h1 className="text-2xl font-semibold">Portfolio Strategy Tracker</h1>
                 <p className="text-sm text-zinc-400">Private by default · Monthly check-ins · Explainable allocation guidance</p>
               </div>
-              <div className="flex items-center gap-2">
-                <button onClick={handleSave} title="Save" className={`h-10 w-10 rounded-lg border flex items-center justify-center text-xl ${dirty ? "bg-blue-600 hover:bg-blue-500 border-blue-500" : "bg-zinc-800 border-zinc-700 hover:bg-zinc-700"}`}>💾</button>
-                {dirty && <span className="text-amber-400" title="Unsaved changes">●</span>}
-                <button onClick={() => setConfigOpen(true)} title="Configuration" className="h-10 w-10 rounded-lg bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 flex items-center justify-center text-xl">⚙</button>
-                <button onClick={handleCloseFile} title="Close" className="h-10 w-10 rounded-lg bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 flex items-center justify-center text-xl">✖</button>
+              <div className="flex items-center gap-3">
+                <div className="text-right text-xs">
+                  <div className={dirty ? "text-amber-400" : "text-zinc-400"}>{dirty ? "● Unsaved changes" : canSave ? "Saved" : "Sample portfolio · not saved to a file"}</div>
+                  {!dirty && lastSavedAt && <div className="text-zinc-600">Saved at {lastSavedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>}
+                </div>
+                <button onClick={handleSave} disabled={loading || !canSave || !dirty} className={`h-10 rounded-lg border px-4 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 ${dirty && canSave ? "border-blue-500 bg-blue-600 hover:bg-blue-500" : "border-zinc-700 bg-zinc-800 hover:bg-zinc-700"}`}>{loading ? "Saving…" : "Save"}</button>
+                <button onClick={() => setConfigOpen(true)} className="h-10 rounded-lg border border-zinc-700 bg-zinc-800 px-4 text-sm hover:bg-zinc-700">Settings</button>
+                <button onClick={requestClosePortfolio} disabled={loading} className="h-10 rounded-lg border border-zinc-700 bg-zinc-800 px-4 text-sm hover:bg-zinc-700 disabled:opacity-50">Close portfolio</button>
               </div>
             </header>
 
@@ -403,6 +438,7 @@ export default function App() {
                 onChangeDate={handleChangeSnapshotDate}
                 onChangeCashFlow={handleChangeSnapshotCashFlow}
                 onDelete={handleDeleteSnapshot}
+                onRestore={handleRestoreSnapshot}
                 currency={currency}
               />
               {!isLatestSnapshot && <div className="mb-3 rounded-lg border border-amber-900/60 bg-amber-950/20 p-2 text-xs text-amber-300">Historical snapshot: values are read-only.</div>}
@@ -436,18 +472,21 @@ export default function App() {
 
           <footer className="text-center text-xs text-zinc-500 py-8">v{pkg.version}</footer>
 
-          <AddAssetModal open={addOpen} onClose={() => setAddOpen(false)} assetTypes={assetTypes} dimensions={dimensions} currency={currency} onAdd={addAsset} />
-          <AddLiabilityModal open={addLiabilityOpen} onClose={() => setAddLiabilityOpen(false)} liabilityTypes={liabilityTypes} onAdd={addLiability} />
-          <EditAssetModal open={!!editAsset} asset={editAsset} onClose={() => setEditAsset(null)} assetTypes={assetTypes} dimensions={dimensions} currency={currency} onSave={updateAsset} onDelete={requestDeleteAsset} />
-          <EditLiabilityModal open={!!editLiability} liability={editLiability} onClose={() => setEditLiability(null)} liabilityTypes={liabilityTypes} onSave={updateLiability} onDelete={requestDeleteLiability} />
-          <ConfirmModal open={!!assetToDelete} title="Remove asset?" onConfirm={confirmDeleteAsset} onCancel={cancelDeleteAsset} />
-          <ConfirmModal open={!!liabilityToDelete} title="Remove liability?" onConfirm={confirmDeleteLiability} onCancel={cancelDeleteLiability} />
+          <AddAssetModal open={addOpen} onClose={() => setAddOpen(false)} assetTypes={assetTypes} dimensions={dimensions} currency={currency} referencedCurrencies={referencedCurrencies} onAdd={addAsset} />
+          <AddLiabilityModal open={addLiabilityOpen} onClose={() => setAddLiabilityOpen(false)} liabilityTypes={liabilityTypes} currency={currency} onAdd={addLiability} />
+          <EditAssetModal open={!!editAsset} asset={editAsset} onClose={() => setEditAsset(null)} assetTypes={assetTypes} dimensions={dimensions} currency={currency} referencedCurrencies={referencedCurrencies} onSave={updateAsset} onDelete={requestDeleteAsset} />
+          <EditLiabilityModal open={!!editLiability} liability={editLiability} onClose={() => setEditLiability(null)} liabilityTypes={liabilityTypes} currency={currency} onSave={updateLiability} onDelete={requestDeleteLiability} />
+          <ConfirmModal open={!!assetToDelete} title="Delete asset?" message={assetToDelete ? `Delete “${assetToDelete.name}” from the current portfolio snapshot?` : ""} onConfirm={confirmDeleteAsset} onCancel={cancelDeleteAsset} />
+          <ConfirmModal open={!!liabilityToDelete} title="Delete liability?" message={liabilityToDelete ? `Delete “${liabilityToDelete.name}” from the current portfolio snapshot?` : ""} onConfirm={confirmDeleteLiability} onCancel={cancelDeleteLiability} />
           <JsonEditorModal
             open={jsonOpen}
             onClose={() => setJsonOpen(false)}
             data={{ ...DEFAULT_PORTFOLIO, currency, assetTypes, liabilityTypes, dimensions, strategy, incomeRecords, snapshots, liabilities }}
             onSave={handleJsonSave}
           />
+          <ClosePortfolioModal open={closePortfolioOpen} canSave={canSave} loading={loading} onCancel={() => setClosePortfolioOpen(false)} onSaveAndClose={saveAndClosePortfolio} onDiscardAndClose={discardAndClosePortfolio} />
+          <UndoToast message={deletedAsset ? `Asset “${deletedAsset.asset.name}” deleted.` : ""} onUndo={undoDeleteAsset} onDismiss={clearDeletedAsset} />
+          <UndoToast message={deletedLiability ? `Liability “${deletedLiability.liability.name}” deleted.` : ""} onUndo={undoDeleteLiability} onDismiss={clearDeletedLiability} />
         </>
       )}
 
@@ -475,6 +514,8 @@ export default function App() {
             setPortfolioView("total");
             if (snapshots.length) handleSelectSnapshot(snapshots.length - 1);
           }}
+          referencedCurrencies={referencedCurrencies}
+          nestedDialogOpen={jsonOpen}
         />
       )}
     </div>

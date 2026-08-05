@@ -4,6 +4,7 @@ import { mkAsset } from "../utils.js";
 
 export default function useAssetManager({ assets, assetTypes, setAssetsAndUpdateSnapshot, setEditAsset }) {
   const [assetToDelete, setAssetToDelete] = useState(null);
+  const [deletedAsset, setDeletedAsset] = useState(null);
 
   function addAsset(input) {
     const base = mkAsset(input.type, assetTypes, input.name);
@@ -23,9 +24,18 @@ export default function useAssetManager({ assets, assetTypes, setAssetsAndUpdate
 
   function confirmDeleteAsset() {
     if (assetToDelete) {
+      setDeletedAsset({ asset: assetToDelete, index: assets.findIndex((asset) => asset.id === assetToDelete.id) });
       setAssetsAndUpdateSnapshot(assets.filter((x) => x.id !== assetToDelete.id));
       setAssetToDelete(null);
     }
+  }
+
+  function undoDeleteAsset() {
+    if (!deletedAsset) return;
+    const next = [...assets];
+    next.splice(Math.max(0, Math.min(deletedAsset.index, next.length)), 0, deletedAsset.asset);
+    setAssetsAndUpdateSnapshot(next);
+    setDeletedAsset(null);
   }
 
   function cancelDeleteAsset() {
@@ -39,5 +49,8 @@ export default function useAssetManager({ assets, assetTypes, setAssetsAndUpdate
     assetToDelete,
     confirmDeleteAsset,
     cancelDeleteAsset,
+    deletedAsset,
+    undoDeleteAsset,
+    clearDeletedAsset: () => setDeletedAsset(null),
   };
 }

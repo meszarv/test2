@@ -50,6 +50,7 @@ export default function usePortfolioFile({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [dirty, setDirty] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState(null);
   const skipDirty = useRef(true);
 
   useEffect(() => {
@@ -78,6 +79,16 @@ export default function usePortfolioFile({
     }
     setDirty(true);
   }, [assetTypes, liabilityTypes, currency, dimensions, strategy, incomeRecords, snapshots]);
+
+  useEffect(() => {
+    function beforeUnload(event) {
+      if (!dirty) return;
+      event.preventDefault();
+      event.returnValue = "";
+    }
+    window.addEventListener("beforeunload", beforeUnload);
+    return () => window.removeEventListener("beforeunload", beforeUnload);
+  }, [dirty]);
 
   async function handleOpenExisting() {
     try {
@@ -160,6 +171,7 @@ export default function usePortfolioFile({
       setCurrentIndex(sampleSnapshots.length - 1);
       setStep("main");
       setDirty(false);
+      setLastSavedAt(null);
       skipDirty.current = true;
     } catch (e) {
       setError(e && e.message ? e.message : String(e));
@@ -221,6 +233,7 @@ export default function usePortfolioFile({
       setLiabilityTypes(lt);
       setStep("main");
       setDirty(false);
+      setLastSavedAt(null);
       skipDirty.current = true;
     } catch (e) {
       if (e && (e.name === "NotAllowedError" || e.name === "NotFoundError")) {
@@ -257,6 +270,7 @@ export default function usePortfolioFile({
       return await fn();
     } catch (e) {
       setError(e && e.message ? e.message : String(e));
+      return false;
     } finally {
       setLoading(false);
     }
@@ -265,7 +279,7 @@ export default function usePortfolioFile({
   async function handleSave() {
     if (!fileHandle && !driveFileId) return setError("Select a file first.");
     if (!password) return setError("Enter a password first.");
-    await withLoading(async () => {
+    return withLoading(async () => {
       const data = buildPortfolioData();
       if (driveFileId) {
         const id = await writeDrivePortfolioFile(driveFileId, password, data);
@@ -274,23 +288,26 @@ export default function usePortfolioFile({
         await writePortfolioFile(fileHandle, password, data);
       }
       setDirty(false);
+      setLastSavedAt(new Date());
       skipDirty.current = true;
     });
   }
 
-  async function handleCloseFile() {
-    if (!fileHandle && !driveFileId) return;
-    await withLoading(async () => {
-      const data = buildPortfolioData();
-      if (driveFileId) {
-        await writeDrivePortfolioFile(driveFileId, password, data);
-        setDriveFileId(null);
-      } else {
-        await writePortfolioFile(fileHandle, password, data);
+  async function handleCloseFile({ save = false } = {}) {
+    return withLoading(async () => {
+      if (save) {
+        if (!fileHandle && !driveFileId) throw new Error("This portfolio has no file to save to.");
+        const data = buildPortfolioData();
+        if (driveFileId) await writeDrivePortfolioFile(driveFileId, password, data);
+        else await writePortfolioFile(fileHandle, password, data);
+      }
+      if (driveFileId) setDriveFileId(null);
+      if (fileHandle) {
         await clearSavedFile();
         setFileHandle(null);
       }
       setDirty(false);
+      setLastSavedAt(null);
       skipDirty.current = true;
       setPassword("");
       setSnapshots([]);
@@ -319,6 +336,8 @@ export default function usePortfolioFile({
     error,
     setError,
     dirty,
+    lastSavedAt,
+    canSave: Boolean(fileHandle || driveFileId),
     setDirty,
     skipDirty,
     handleOpenExisting,

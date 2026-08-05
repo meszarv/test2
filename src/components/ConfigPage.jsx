@@ -3,7 +3,7 @@ import AssetTypeManager from "./AssetTypeManager.jsx";
 import LiabilityTypeManager from "./LiabilityTypeManager.jsx";
 import DimensionManager from "./DimensionManager.jsx";
 import StrategyEditor from "./StrategyEditor.jsx";
-import TextInput from "./TextInput.jsx";
+import CurrencySelect from "./CurrencySelect.jsx";
 import { assetInPortfolioView, portfolioMetrics, portfolioViews } from "../data.js";
 import { formatCurrency } from "../utils.js";
 import { CollapsiblePanel, SettingsSectionHeader, SettingsSummaryCard, SettingsValidation } from "./SettingsUI.jsx";
@@ -18,12 +18,13 @@ const sections = [
   { key: "data", label: "Data & Integrations" },
 ];
 
-function GeneralSettings({ currency, setCurrency }) {
+function GeneralSettings({ currency, setCurrency, assets, referencedCurrencies = [] }) {
+  const currencies = Array.from(new Set([...referencedCurrencies, ...(assets || []).map((asset) => asset.pricingCurrency).filter(Boolean)]));
   return (
     <div className="space-y-6">
       <SettingsSectionHeader title="General" description="Portfolio-wide display settings." />
       <div className="max-w-md rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
-        <TextInput label="Base currency" value={currency} onChange={(value) => setCurrency(value.toUpperCase())} />
+        <CurrencySelect label="Base currency" value={currency} onChange={setCurrency} referencedCurrencies={currencies} />
         <p className="mt-2 text-xs text-zinc-500">Values and totals are displayed in this currency. Asset pricing currencies and FX rates remain separate.</p>
       </div>
     </div>
@@ -137,6 +138,8 @@ export default function ConfigPage({
   onEditJson,
   onDone,
   onReviewScopes,
+  referencedCurrencies = [],
+  nestedDialogOpen = false,
 }) {
   const [activeSection, setActiveSection] = useState("general");
   const mainRef = useRef(null);
@@ -165,8 +168,20 @@ export default function ConfigPage({
     };
   }, []);
 
+  useEffect(() => {
+    if (nestedDialogOpen) return undefined;
+    function keydown(event) {
+      if (event.key !== "Escape") return;
+      window.setTimeout(() => {
+        if (!event.defaultPrevented) onDone?.();
+      }, 0);
+    }
+    window.addEventListener("keydown", keydown);
+    return () => window.removeEventListener("keydown", keydown);
+  }, [nestedDialogOpen, onDone]);
+
   function content() {
-    if (activeSection === "general") return <GeneralSettings currency={currency} setCurrency={setCurrency} />;
+    if (activeSection === "general") return <GeneralSettings currency={currency} setCurrency={setCurrency} assets={assets} referencedCurrencies={referencedCurrencies} />;
     if (activeSection === "views") return <PortfolioViewSettings assets={assets} liabilities={liabilities} currency={currency} onReviewScopes={onReviewScopes} />;
     if (activeSection === "strategy") return <StrategyEditor strategy={strategy} setStrategy={setStrategy} assetTypes={assetTypes} dimensions={dimensions} currency={currency} assets={assets} />;
     if (activeSection === "asset_types") return <AssetTypeManager assetTypes={assetTypes} setAssetTypes={setAssetTypes} assets={assets} dimensions={dimensions} />;

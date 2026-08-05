@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { currentByDimension, dimensionName, dimensionRegistry } from "../data.js";
-import TextInput from "./TextInput.jsx";
+import NumberInput, { MoneyInput, PercentageInput } from "./NumberInput.jsx";
 import { CollapsiblePanel, SettingsSectionHeader, SettingsSummaryCard, SettingsValidation } from "./SettingsUI.jsx";
 
 const importanceLabels = { 1: "Low", 2: "Medium", 3: "High" };
@@ -17,9 +17,10 @@ function hasConfiguredValue(config = {}) {
 
 export default function StrategyEditor({ strategy, setStrategy, assetTypes, dimensions, currency, assets = [] }) {
   const [openKey, setOpenKey] = useState("asset_type");
+  const [rangeErrors, setRangeErrors] = useState({});
 
   function setCashReserveTarget(value) {
-    setStrategy({ ...strategy, cashReserveTarget: Number(value) || 0 });
+    setStrategy({ ...strategy, cashReserveTarget: value });
   }
 
   function updatePolicy(key, patch) {
@@ -36,10 +37,24 @@ export default function StrategyEditor({ strategy, setStrategy, assetTypes, dime
   function updateCategory(dimensionKey, category, field, value) {
     const policy = strategy.dimensionPolicies?.[dimensionKey] || {};
     const categories = policy.categories || {};
+    const current = categories[category] || {};
+    const nextMinimum = field === "min" ? value : current.min;
+    const nextMaximum = field === "max" ? value : current.max;
+    const errorKey = `${dimensionKey}:${category}`;
+    if (nextMinimum !== "" && nextMinimum != null && nextMaximum !== "" && nextMaximum != null && Number(nextMinimum) > Number(nextMaximum)) {
+      setRangeErrors((errors) => ({ ...errors, [errorKey]: "Minimum cannot exceed maximum." }));
+      return;
+    }
+    setRangeErrors((errors) => {
+      if (!errors[errorKey]) return errors;
+      const next = { ...errors };
+      delete next[errorKey];
+      return next;
+    });
     updatePolicy(dimensionKey, {
       categories: {
         ...categories,
-        [category]: { ...categories[category], [field]: value === "" ? "" : Number(value) || 0 },
+        [category]: { ...categories[category], [field]: value },
       },
     });
   }
@@ -68,11 +83,11 @@ export default function StrategyEditor({ strategy, setStrategy, assetTypes, dime
 
       <div className="grid md:grid-cols-[minmax(0,1fr)_14rem] gap-3">
         <div className="rounded-xl border border-blue-900/70 bg-blue-950/20 p-4">
-          <TextInput
+          <MoneyInput
             label={`Checking-account cash reserve (${currency})`}
-            type="number"
             value={String(strategy.cashReserveTarget || 0)}
             onChange={setCashReserveTarget}
+            currency={currency}
           />
           <p className="mt-2 text-xs text-zinc-400">Checking-account cash above this amount becomes available for Financial Portfolio investments.</p>
         </div>
@@ -120,11 +135,13 @@ export default function StrategyEditor({ strategy, setStrategy, assetTypes, dime
                       <option value="limits">Minimum / maximum</option>
                     </select>
                   </label>
-                  <TextInput
+                  <NumberInput
                     label="Tolerance pp"
-                    type="number"
                     value={String(policy.tolerance ?? 2)}
-                    onChange={(value) => updatePolicy(key, { tolerance: Number(value) || 0 })}
+                    min={0}
+                    max={100}
+                    precision={2}
+                    onChange={(value) => updatePolicy(key, { tolerance: value })}
                     disabled={policy.mode !== "target"}
                   />
                   <label className="block text-sm">
@@ -155,13 +172,13 @@ export default function StrategyEditor({ strategy, setStrategy, assetTypes, dime
                           </div>
                           {policy.mode === "target" ? (
                             <>
-                              <TextInput label="Target %" type="number" value={String(categories[category]?.target ?? 0)} onChange={(value) => updateCategory(key, category, "target", value)} />
+                              <PercentageInput label="Target %" value={String(categories[category]?.target ?? 0)} onChange={(value) => updateCategory(key, category, "target", value)} />
                               <div />
                             </>
                           ) : (
                             <>
-                              <TextInput label="Minimum %" type="number" value={String(categories[category]?.min ?? "")} onChange={(value) => updateCategory(key, category, "min", value)} />
-                              <TextInput label="Maximum %" type="number" value={String(categories[category]?.max ?? "")} onChange={(value) => updateCategory(key, category, "max", value)} />
+                              <PercentageInput label="Minimum %" value={String(categories[category]?.min ?? "")} required={false} onChange={(value) => updateCategory(key, category, "min", value)} externalError={rangeErrors[`${key}:${category}`] || ""} />
+                              <PercentageInput label="Maximum %" value={String(categories[category]?.max ?? "")} required={false} onChange={(value) => updateCategory(key, category, "max", value)} />
                             </>
                           )}
                         </div>

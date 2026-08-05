@@ -1,31 +1,32 @@
-import React from "react";
+import Modal from "./Modal.jsx";
 
-export default function ConfirmModal({ open, title, message, onConfirm, onCancel }) {
-  if (!open) return null;
+export default function ConfirmModal({
+  open,
+  title,
+  message,
+  onConfirm,
+  onCancel,
+  confirmLabel = "Delete",
+  destructive = true,
+}) {
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4">
-      <div className="bg-zinc-900 rounded-xl p-4 w-full max-w-sm space-y-3">
-        {title && <h2 className="text-lg font-medium">{title}</h2>}
-        {message && <p className="text-sm">{message}</p>}
-        <div className="flex justify-between gap-2 pt-2">
-          <button
-            onClick={onConfirm}
-            title="Delete"
-            className="px-3 py-2 rounded-lg bg-red-600 hover:bg-red-500"
-          >
-            🗑️
-          </button>
-          <div className="flex gap-2">
-            <button
-              onClick={onCancel}
-              title="Close"
-              className="px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 hover:bg-zinc-700"
-            >
-              ✖
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+    <Modal
+      open={open}
+      title={title}
+      onClose={onCancel}
+      size="max-w-sm"
+      zIndex="z-[60]"
+      primaryAction={(
+        <button
+          type="button"
+          onClick={onConfirm}
+          className={`rounded-lg px-4 py-2 text-sm ${destructive ? "bg-red-700 hover:bg-red-600" : "bg-blue-600 hover:bg-blue-500"}`}
+        >
+          {destructive ? "🗑️ " : ""}{confirmLabel}
+        </button>
+      )}
+    >
+      <p className="text-sm text-zinc-300">{message || "This action cannot be undone after the confirmation window closes."}</p>
+    </Modal>
   );
 }

@@ -18,6 +18,7 @@ function setupDom() {
   global.document = dom.window.document;
   global.navigator = { userAgent: 'node.js' };
   global.HTMLElement = dom.window.HTMLElement;
+  global.HTMLElement.prototype.attachEvent = () => {};
   return dom;
 }
 
@@ -44,14 +45,16 @@ test('LiabilityTypeManager can add types', async () => {
           updated = t;
         },
         liabilities: [],
+        initialNewName: 'New type',
       })
     );
   });
-  window.prompt = () => 'New type';
   const addBtn = container.querySelector('button[title="Add type"]');
   await act(async () => {
     addBtn.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
   });
+  const saveButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent.trim() === 'Add');
+  await act(async () => saveButton.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })));
   assert.equal(Object.keys(updated).length, 2);
 });
 
@@ -60,11 +63,6 @@ test('LiabilityTypeManager prevents removing types in use', async () => {
   const container = document.createElement('div');
   document.body.appendChild(container);
   let called = false;
-  let alertCalled = false;
-  window.alert = () => {
-    alertCalled = true;
-  };
-  global.alert = window.alert;
   const root = createRoot(container);
   await act(async () => {
     root.render(
@@ -77,10 +75,7 @@ test('LiabilityTypeManager prevents removing types in use', async () => {
       })
     );
   });
-  const delBtn = container.querySelector('button[title="Delete"]');
-  await act(async () => {
-    delBtn.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
-  });
+  const delBtn = container.querySelector('button[title="Cannot delete a type used by liabilities"]');
+  assert.equal(delBtn.disabled, true);
   assert.equal(called, false);
-  assert.equal(alertCalled, true);
 });

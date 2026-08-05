@@ -86,8 +86,8 @@ export default function useSnapshots({ assets, setAssets, liabilities, setLiabil
     setSnapshots((prev) => prev.map((snapshot, index) => index === i
       ? {
           ...snapshot,
-          contributions: Number(contributions) || 0,
-          withdrawals: Number(withdrawals) || 0,
+          contributions: contributions === "" ? 0 : Number(contributions),
+          withdrawals: withdrawals === "" ? 0 : Number(withdrawals),
         }
       : snapshot));
   }
@@ -107,6 +107,21 @@ export default function useSnapshots({ assets, setAssets, liabilities, setLiabil
     });
   }
 
+  function handleRestoreSnapshot(snapshot, originalIndex) {
+    if (!snapshot) return;
+    setSnapshots((previous) => {
+      if (previous.some((item) => item.asOf.slice(0, 7) === snapshot.asOf.slice(0, 7))) return previous;
+      const next = [...previous];
+      next.splice(Math.max(0, Math.min(originalIndex, next.length)), 0, snapshot);
+      next.sort((left, right) => new Date(left.asOf) - new Date(right.asOf));
+      const index = next.findIndex((item) => item.asOf === snapshot.asOf);
+      setCurrentIndex(index);
+      setAssets((snapshot.assets || []).map((asset) => ({ ...asset, dimensions: JSON.parse(JSON.stringify(asset.dimensions || {})) })));
+      setLiabilities((snapshot.liabilities || []).map((liability) => ({ ...liability })));
+      return next;
+    });
+  }
+
   return {
     snapshots,
     setSnapshots,
@@ -119,5 +134,6 @@ export default function useSnapshots({ assets, setAssets, liabilities, setLiabil
     handleChangeSnapshotDate,
     handleChangeSnapshotCashFlow,
     handleDeleteSnapshot,
+    handleRestoreSnapshot,
   };
 }

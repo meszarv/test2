@@ -3,14 +3,20 @@ import TextInput from "./TextInput.jsx";
 import { mkId } from "../utils.js";
 import { portfolioScopeOptions } from "../data.js";
 import { CollapsiblePanel, SettingsEmptyState, SettingsSectionHeader, SettingsSummaryCard } from "./SettingsUI.jsx";
+import ConfirmModal from "./ConfirmModal.jsx";
+import NameDialog from "./NameDialog.jsx";
+import UndoToast from "./UndoToast.jsx";
 
 const ruleModeLabels = { user: "User selects", default: "Default", locked: "Locked", na: "Not applicable" };
 
-export default function AssetTypeManager({ assetTypes, setAssetTypes, assets, dimensions, initialSearch = "" }) {
+export default function AssetTypeManager({ assetTypes, setAssetTypes, assets, dimensions, initialSearch = "", initialNewName = "" }) {
   const [selectedKey, setSelectedKey] = useState(() => Object.keys(assetTypes)[0] || "");
   const [query, setQuery] = useState(initialSearch);
   const [openDimension, setOpenDimension] = useState("");
   const [showMobileDetail, setShowMobileDetail] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [deleteKey, setDeleteKey] = useState("");
+  const [undo, setUndo] = useState(null);
   const detailRef = useRef(null);
   const selectedButtonRef = useRef(null);
   const hasChangedView = useRef(false);
@@ -69,28 +75,27 @@ export default function AssetTypeManager({ assetTypes, setAssetTypes, assets, di
     setAssetTypes({ ...assetTypes, [typeKey]: { ...definition, scopeRule: next } });
   }
 
-  function addType() {
-    const name = window.prompt("New asset type", "New type");
-    if (!name) return;
+  function addType(name) {
     const key = mkId();
     hasChangedView.current = true;
     setAssetTypes({ ...assetTypes, [key]: { name, scopeRule: { mode: "user", value: "" }, dimensionRules: {} } });
     setSelectedKey(key);
     setShowMobileDetail(true);
+    setAddOpen(false);
   }
 
   function removeType(key) {
-    if (usageCounts[key]) {
-      window.alert(`Cannot remove this type because ${usageCounts[key]} asset${usageCounts[key] === 1 ? " uses" : "s use"} it.`);
-      return;
-    }
+    if (usageCounts[key]) return;
     const copy = { ...assetTypes };
+    const removed = copy[key];
     delete copy[key];
     const nextKey = Object.keys(copy)[0] || "";
     hasChangedView.current = true;
     setAssetTypes(copy);
     setSelectedKey(nextKey);
     setShowMobileDetail(false);
+    setDeleteKey("");
+    setUndo({ key, definition: removed });
   }
 
   const definition = assetTypes[selectedKey];
@@ -109,7 +114,7 @@ export default function AssetTypeManager({ assetTypes, setAssetTypes, assets, di
           <div className="border-b border-zinc-800 p-3 space-y-3">
             <div className="flex items-center justify-between gap-2">
               <h3 className="font-medium">Types</h3>
-              <button type="button" onClick={addType} title="Add type" className="h-9 w-9 rounded-lg border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 focus:outline-none focus:ring-2 focus:ring-blue-500">➕</button>
+              <button type="button" onClick={() => setAddOpen(true)} title="Add type" className="h-9 w-9 rounded-lg border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 focus:outline-none focus:ring-2 focus:ring-blue-500">➕</button>
             </div>
             <TextInput label="Search asset types" value={query} onChange={setQuery} />
           </div>
@@ -155,12 +160,13 @@ export default function AssetTypeManager({ assetTypes, setAssetTypes, assets, di
                 </div>
                 <button
                   type="button"
-                  onClick={() => removeType(selectedKey)}
+                  onClick={() => setDeleteKey(selectedKey)}
                   title={usageCounts[selectedKey] ? "Cannot delete a type used by assets" : "Delete"}
                   disabled={!!usageCounts[selectedKey]}
                   className="h-10 w-10 rounded-lg border border-red-900 bg-red-950/50 text-red-300 hover:bg-red-900/60 disabled:cursor-not-allowed disabled:opacity-40"
                 >🗑️</button>
               </div>
+              {!!usageCounts[selectedKey] && <p className="text-xs text-zinc-500">This type cannot be deleted because {usageCounts[selectedKey]} asset{usageCounts[selectedKey] === 1 ? " uses" : "s use"} it.</p>}
 
               <div className="grid md:grid-cols-2 gap-4 rounded-xl border border-zinc-800 p-4">
                 <TextInput label="Asset type name" value={definition.name} onChange={(name) => updateName(selectedKey, name)} />
@@ -227,10 +233,13 @@ export default function AssetTypeManager({ assetTypes, setAssetTypes, assets, di
               </div>
             </div>
           ) : (
-            <SettingsEmptyState title="No asset types" description="Add an asset type to configure its portfolio scope and dimension rules." action={<button type="button" onClick={addType} className="rounded-lg bg-blue-600 px-3 py-2 text-sm hover:bg-blue-500">➕ Add type</button>} />
+            <SettingsEmptyState title="No asset types" description="Add an asset type to configure its portfolio scope and dimension rules." action={<button type="button" onClick={() => setAddOpen(true)} className="rounded-lg bg-blue-600 px-3 py-2 text-sm hover:bg-blue-500">➕ Add type</button>} />
           )}
         </div>
       </div>
+      <NameDialog open={addOpen} title="Add asset type" label="Asset type name" initialValue={initialNewName} existingNames={Object.values(assetTypes).map((type) => type.name)} onClose={() => setAddOpen(false)} onSave={addType} />
+      <ConfirmModal open={!!deleteKey} title="Delete asset type?" message={deleteKey ? `Delete “${assetTypes[deleteKey]?.name}” from the available asset types?` : ""} onCancel={() => setDeleteKey("")} onConfirm={() => removeType(deleteKey)} />
+      <UndoToast message={undo ? "Asset type deleted." : ""} onUndo={() => { if (!undo) return; setAssetTypes({ ...assetTypes, [undo.key]: undo.definition }); setSelectedKey(undo.key); setUndo(null); }} onDismiss={() => setUndo(null)} />
     </div>
   );
 }

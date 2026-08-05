@@ -2,12 +2,18 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import TextInput from "./TextInput.jsx";
 import { mkId } from "../utils.js";
 import { SettingsEmptyState, SettingsSectionHeader } from "./SettingsUI.jsx";
+import ConfirmModal from "./ConfirmModal.jsx";
+import NameDialog from "./NameDialog.jsx";
+import UndoToast from "./UndoToast.jsx";
 
-export default function DimensionManager({ dimensions, setDimensions, assetTypes, assets, strategy }) {
+export default function DimensionManager({ dimensions, setDimensions, assetTypes, assets, strategy, initialNewValue = "" }) {
   const [selectedKey, setSelectedKey] = useState(() => Object.keys(dimensions)[0] || "");
   const [query, setQuery] = useState("");
   const [sortAsc, setSortAsc] = useState(true);
   const [showMobileDetail, setShowMobileDetail] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [deleteValue, setDeleteValue] = useState(null);
+  const [undo, setUndo] = useState(null);
   const detailRef = useRef(null);
   const selectedButtonRef = useRef(null);
   const hasChangedView = useRef(false);
@@ -54,25 +60,24 @@ export default function DimensionManager({ dimensions, setDimensions, assetTypes
     });
   }
 
-  function addValue(dimensionKey) {
-    const name = window.prompt(`New ${dimensions[dimensionKey].name} value`, "New value");
-    if (!name) return;
+  function addValue(dimensionKey, name) {
     const key = mkId();
     setDimensions({
       ...dimensions,
       [dimensionKey]: { ...dimensions[dimensionKey], values: { ...dimensions[dimensionKey].values, [key]: { name } } },
     });
+    setAddOpen(false);
   }
 
   function removeValue(dimensionKey, valueKey) {
     const references = referenceCount(dimensionKey, valueKey);
-    if (references) {
-      window.alert(`Cannot remove this value because it has ${references} portfolio reference${references === 1 ? "" : "s"}.`);
-      return;
-    }
+    if (references) return;
     const values = { ...dimensions[dimensionKey].values };
+    const removed = values[valueKey];
     delete values[valueKey];
     setDimensions({ ...dimensions, [dimensionKey]: { ...dimensions[dimensionKey], values } });
+    setDeleteValue(null);
+    setUndo({ dimensionKey, valueKey, value: removed });
   }
 
   const dimension = dimensions[selectedKey];
@@ -129,7 +134,7 @@ export default function DimensionManager({ dimensions, setDimensions, assetTypes
                     <h4 className="font-medium">Values</h4>
                     <p className="text-xs text-zinc-500">Values in use are protected from deletion.</p>
                   </div>
-                  <button type="button" onClick={() => addValue(selectedKey)} title="Add value" className="h-9 w-9 rounded-lg border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 focus:outline-none focus:ring-2 focus:ring-blue-500">➕</button>
+                  <button type="button" onClick={() => setAddOpen(true)} title="Add value" className="h-9 w-9 rounded-lg border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 focus:outline-none focus:ring-2 focus:ring-blue-500">➕</button>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[32rem] text-sm">
@@ -152,7 +157,7 @@ export default function DimensionManager({ dimensions, setDimensions, assetTypes
                                 type="button"
                                 title={references ? `Cannot delete: ${references} references` : "Delete"}
                                 disabled={!!references}
-                                onClick={() => removeValue(selectedKey, valueKey)}
+                                onClick={() => setDeleteValue({ dimensionKey: selectedKey, valueKey })}
                                 className="h-9 w-9 rounded-lg border border-red-900 bg-red-950/50 text-red-300 hover:bg-red-900/60 disabled:cursor-not-allowed disabled:opacity-40"
                               >🗑️</button>
                             </td>
@@ -168,6 +173,9 @@ export default function DimensionManager({ dimensions, setDimensions, assetTypes
           ) : <SettingsEmptyState title="No dimensions" description="No configurable concentration dimensions are available." />}
         </div>
       </div>
+      <NameDialog open={addOpen} title={`Add ${dimension?.name || "dimension"} value`} label="Value name" initialValue={initialNewValue} existingNames={Object.values(dimension?.values || {}).map((value) => value.name)} onClose={() => setAddOpen(false)} onSave={(name) => addValue(selectedKey, name)} />
+      <ConfirmModal open={!!deleteValue} title="Delete dimension value?" message={deleteValue ? `Delete “${dimensions[deleteValue.dimensionKey]?.values?.[deleteValue.valueKey]?.name}” from ${dimensions[deleteValue.dimensionKey]?.name}?` : ""} onCancel={() => setDeleteValue(null)} onConfirm={() => deleteValue && removeValue(deleteValue.dimensionKey, deleteValue.valueKey)} />
+      <UndoToast message={undo ? "Dimension value deleted." : ""} onUndo={() => { if (!undo) return; const target = dimensions[undo.dimensionKey]; setDimensions({ ...dimensions, [undo.dimensionKey]: { ...target, values: { ...target.values, [undo.valueKey]: undo.value } } }); setUndo(null); }} onDismiss={() => setUndo(null)} />
     </div>
   );
 }
