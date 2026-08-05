@@ -62,8 +62,9 @@ export default function AssetTable({ assets, prevAssets, setAssets, assetTypes, 
         <thead className="text-zinc-400"><tr>{heading("Name", "name")}{heading("Type", "type")}{heading("Quantity", "quantity", "right")}{heading("Price / total", "price", "right")}{heading("Current value", "value", "right")}{heading("Cost basis", "costBasis", "right")}{heading("Gain / loss", "gain", "right")}<th className="w-20 p-2 text-right">Edit</th></tr></thead>
         <tbody>{sortedAssets.map((asset) => {
           const current = assetValue(asset);
-          const previous = previousValues.get(asset.id) || 0;
-          const delta = current - previous;
+          const hasPrevious = previousValues.has(asset.id);
+          const previous = previousValues.get(asset.id) ?? 0;
+          const delta = hasPrevious ? current - previous : null;
           const basis = costBasisValue(asset);
           const gain = current - basis;
           const quoteCurrency = asset.pricingCurrency || currency;
@@ -73,7 +74,7 @@ export default function AssetTable({ assets, prevAssets, setAssets, assetTypes, 
               <td className="p-2">{assetTypes[asset.type]?.name || asset.type}</td>
               <td className="p-2 text-right">{asset.valuationMode === "units" ? <InlineNumber label={`${asset.name} quantity`} value={asset.quantity} formatted={(Number(asset.quantity) || 0).toLocaleString(undefined, { maximumFractionDigits: 6 })} kind="quantity" precision={6} onCommit={(value) => update(asset.id, "quantity", value)} readOnly={readOnly} /> : <span className="text-zinc-600">—</span>}</td>
               <td className="p-2 text-right"><InlineNumber label={`${asset.name} ${asset.valuationMode === "units" ? "unit price" : "total value"}`} value={asset.valuationMode === "units" ? asset.unitPrice : asset.value} formatted={formatCurrency(asset.valuationMode === "units" ? asset.unitPrice : asset.value, quoteCurrency)} currency={quoteCurrency} onCommit={(value) => update(asset.id, asset.valuationMode === "units" ? "unitPrice" : "value", value)} readOnly={readOnly} /></td>
-              <td className="whitespace-nowrap p-2 text-right"><div>{formatCurrency(current, currency)}</div>{delta !== 0 && <div className={`text-xs ${delta >= 0 ? "text-emerald-400" : "text-red-400"}`}>{delta >= 0 ? "+" : ""}{formatCurrency(delta, currency)}</div>}</td>
+              <td className="whitespace-nowrap p-2 text-right"><div>{formatCurrency(current, currency)}</div>{delta == null ? <div className="text-xs text-zinc-500" title="No matching asset in the previous snapshot">—</div> : delta !== 0 && <div className={`text-xs ${delta >= 0 ? "text-emerald-400" : "text-red-400"}`}>{delta >= 0 ? "+" : ""}{formatCurrency(delta, currency)}</div>}</td>
               <td className="p-2 text-right"><InlineNumber label={`${asset.name} cost basis`} value={asset.costBasis} formatted={formatCurrency(asset.costBasis, quoteCurrency)} currency={quoteCurrency} onCommit={(value) => update(asset.id, "costBasis", value)} readOnly={readOnly} /></td>
               <td className={`whitespace-nowrap p-2 text-right ${gain >= 0 ? "text-emerald-400" : "text-red-400"}`}>{basis > 0 ? formatCurrency(gain, currency) : "—"}</td>
               <td className="p-2 text-right">{readOnly ? "—" : <button type="button" onClick={() => onEdit?.(asset)} className="rounded-lg border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs hover:bg-zinc-700">Edit</button>}</td>

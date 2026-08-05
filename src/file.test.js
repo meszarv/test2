@@ -127,6 +127,54 @@ test('upgradePortfolio converts v5 allocation and asset observations through v7'
   assert.deepEqual(upgraded.incomeRecords, []);
 });
 
+test('upgradePortfolio reconciles different legacy IDs for the same asset across snapshots', () => {
+  const old = {
+    version: 5,
+    currency: 'EUR',
+    assetTypes: { stock: { name: 'Stock' } },
+    snapshots: [
+      {
+        asOf: '2025-01-15T00:00:00.000Z',
+        assets: [{ id: 'legacy-january', name: 'Broker ETF', type: 'stock', description: 'Main account', value: 100 }],
+        liabilities: [],
+      },
+      {
+        asOf: '2025-02-15T00:00:00.000Z',
+        assets: [{ id: 'legacy-february', name: 'Broker ETF', type: 'stock', description: 'Main account', value: 120 }],
+        liabilities: [],
+      },
+    ],
+  };
+
+  const upgraded = upgradePortfolio(old);
+
+  assert.equal(upgraded.snapshots[0].assets[0].id, 'legacy-january');
+  assert.equal(upgraded.snapshots[1].assets[0].id, 'legacy-january');
+});
+
+test('upgradePortfolio preserves a stable ID when an asset fingerprint changes', () => {
+  const portfolio = {
+    ...DEFAULT_PORTFOLIO,
+    snapshots: [
+      {
+        asOf: '2025-01-15T00:00:00.000Z',
+        assets: [{ id: 'asset-stable', name: 'Broker ETF', type: 'stock', description: 'Old description', value: 100 }],
+        liabilities: [],
+      },
+      {
+        asOf: '2025-02-15T00:00:00.000Z',
+        assets: [{ id: 'asset-stable', name: 'Renamed ETF', type: 'stock', description: 'New description', value: 120 }],
+        liabilities: [],
+      },
+    ],
+  };
+
+  const upgraded = upgradePortfolio(portfolio);
+
+  assert.equal(upgraded.snapshots[0].assets[0].id, 'asset-stable');
+  assert.equal(upgraded.snapshots[1].assets[0].id, 'asset-stable');
+});
+
 test('convertV6ToV7 infers scopes, preserves history, and flags ambiguous assets', () => {
   const old = {
     version: 6,

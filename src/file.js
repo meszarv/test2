@@ -124,6 +124,7 @@ export const DEFAULT_PORTFOLIO = {
 
 function stableRecordIds(snapshots, kind) {
   const known = new Map();
+  const canonicalById = new Map();
   let counter = 0;
   return (snapshots || []).map((snapshot) => {
     const occurrences = new Map();
@@ -132,11 +133,12 @@ function stableRecordIds(snapshots, kind) {
       const occurrence = occurrences.get(fingerprint) || 0;
       occurrences.set(fingerprint, occurrence + 1);
       const lookup = `${fingerprint}\u0000${occurrence}`;
-      let id = record.id || known.get(lookup);
+      let id = (record.id && canonicalById.get(record.id)) || known.get(lookup) || record.id;
       if (!id) {
         counter += 1;
         id = `${kind === "assets" ? "asset" : "liability"}-${counter}`;
       }
+      if (record.id) canonicalById.set(record.id, id);
       known.set(lookup, id);
       return { ...record, id };
     });
