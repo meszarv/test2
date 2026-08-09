@@ -16,11 +16,6 @@ export default function LiabilityTable({ liabilities, prevLiabilities, setLiabil
     setLiabilities(liabilities.map((liability) => liability.id === id ? { ...liability, value } : liability));
   }
 
-  function updatePriority(id, priority) {
-    if (readOnly) return;
-    setLiabilities(liabilities.map((liability) => liability.id === id ? { ...liability, priority } : liability));
-  }
-
   const sortedLiabilities = [...liabilities];
   if (sort.key) {
     sortedLiabilities.sort((left, right) => {
@@ -40,16 +35,16 @@ export default function LiabilityTable({ liabilities, prevLiabilities, setLiabil
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[760px] text-sm">
-        <thead className="text-zinc-400"><tr><th className="p-2">Priority</th>{heading("Name", "name")}{heading("Type", "type")}{heading("Description", "description")}{heading("Value", "value", "right")}<th className="w-20 p-2 text-right">Edit</th></tr></thead>
+      <table className="w-full min-w-[560px] text-sm">
+        <thead className="text-zinc-400"><tr>{heading("Name", "name")}{heading("Type", "type")}{heading("Balance", "value", "right")}<th className="w-20 p-2 text-right">Edit</th></tr></thead>
         <tbody>{sortedLiabilities.map((liability) => {
-          const previous = prevMap.get(liability.id) || 0;
-          const delta = (Number(liability.value) || 0) - previous;
+          const hasPrevious = prevMap.has(liability.id);
+          const previous = prevMap.get(liability.id) ?? 0;
+          const delta = hasPrevious ? (Number(liability.value) || 0) - previous : null;
           return (
             <tr key={liability.id} className="border-t border-zinc-800" onDoubleClick={() => !readOnly && onEdit?.(liability)} title={readOnly ? "Historical snapshot" : "Double-click to edit"}>
-              <td className="p-2 text-center"><input type="checkbox" checked={!!liability.priority} onChange={(event) => updatePriority(liability.id, event.target.checked)} disabled={readOnly} /></td>
-              <td className="p-2">{liability.name}</td><td className="p-2">{liabilityTypes[liability.type]?.name || liability.type}</td><td className="whitespace-pre-line p-2 text-xs">{liability.description}</td>
-              <td className="p-2 text-right"><div className="flex items-center justify-end gap-2">{readOnly ? <span>{formatCurrency(liability.value, currency)}</span> : <NumberInput label={`${liability.name} balance`} kind="money" currency={currency} min={0} precision={2} value={liability.value} onChange={(value) => updateValue(liability.id, value)} className="w-36 [&>span:first-child]:sr-only" inputClassName="border-transparent bg-transparent px-1 py-1 text-right hover:border-zinc-700 focus:bg-zinc-800" />}{delta ? <span className={`text-xs ${delta >= 0 ? "text-green-400" : "text-red-400"}`}>({formatCurrency(delta, currency)})</span> : null}</div></td>
+              <td className="p-2"><div>{liability.name}</div>{liability.description && <div className="text-xs text-zinc-500">{liability.description}</div>}</td><td className="p-2">{liabilityTypes[liability.type]?.name || liability.type}</td>
+              <td className="p-2 text-right"><div className="flex items-center justify-end gap-2">{readOnly ? <span>{formatCurrency(liability.value, currency)}</span> : <NumberInput label={`${liability.name} balance`} kind="money" currency={currency} min={0} precision={2} value={liability.value} onChange={(value) => updateValue(liability.id, value)} className="w-36 [&>span:first-child]:sr-only" inputClassName="border-transparent bg-transparent px-1 py-1 text-right hover:border-zinc-700 focus:bg-zinc-800" />}{delta == null ? <span className="text-xs text-zinc-500" title="No matching liability in the previous snapshot">—</span> : delta !== 0 ? <span className={`text-xs ${delta > 0 ? "text-red-400" : "text-emerald-400"}`}>({formatCurrency(delta, currency)})</span> : null}</div></td>
               <td className="p-2 text-right">{readOnly ? "—" : <button type="button" onClick={() => onEdit?.(liability)} className="rounded-lg border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs hover:bg-zinc-700">Edit</button>}</td>
             </tr>
           );

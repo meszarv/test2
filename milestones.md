@@ -1,142 +1,71 @@
-# Desktop Data-Entry UX — Implementation Plan
+# Focused Portfolio Guidance — Implementation Plan
 
-This plan improves the application’s desktop data-entry experience, error prevention, modal behavior, and save-state clarity. It builds shared controls first and then converts existing screens so behavior remains consistent throughout the application.
+This plan refocuses the application on rule-based investment of surplus cash plus current and historical net-worth oversight. Full history and the Settings workspace remain in scope.
 
-Implementation is complete except for the credentialed production build and regenerated `docs` output. The required build was attempted, but `VITE_GOOGLE_API_KEY` and `VITE_GOOGLE_CLIENT_ID` are not available in this workspace; no substitute credentials were introduced.
+## Milestone 1 — Specification and compatibility
 
-## Scope and decisions
+- [x] Update `SPEC.md` around state snapshots, current holdings, net worth, and surplus-cash guidance.
+- [x] Preserve all current history chart modes and snapshot navigation.
+- [x] Preserve the full Settings workspace.
+- [x] Bump the portfolio file format from version 7 to version 8.
+- [x] Add and test a v7-to-v8 conversion that removes obsolete data without losing active holdings or history.
+- [x] Bump the portfolio file format to version 9 and convert v8 files by removing redundant per-asset valuation dates while preserving snapshot dates and history.
+- [x] Bump the portfolio file format to version 10 and convert v9 files with per-account reserve assignments and an unambiguous Financial cash destination when one can be inferred safely.
+- [x] Restore opening encrypted standalone snapshot files created by the earliest releases.
 
-- Desktop use is the priority; no responsive-layout work is included.
-- Accessibility-specific enhancements are not part of this implementation.
-- Existing investment calculations and portfolio-view semantics remain unchanged.
-- The current portfolio file format should remain unchanged unless implementation introduces a genuinely persisted field. If it does, bump the file version and add a tested conversion from older files.
-- Previously referenced currencies are derived from the base currency and asset pricing currencies, so the currency selector itself does not require a file-format change.
-- Liability tracking remains intentionally simplified.
+## Milestone 2 — Remove unrelated persisted data
 
-## Milestone 1 — Shared numeric input system
+- [x] Remove snapshot contributions and withdrawals.
+- [x] Remove annual income and cost records.
+- [x] Remove asset acquisition date, cost basis, notes, and sold/closed status.
+- [x] Remove the per-asset valuation date; the snapshot check-in date is the single date for each recorded state.
+- [x] Remove liability priority.
+- [x] Remove duplicated top-level liabilities.
+- [x] Ensure inactive v7 assets are omitted during conversion while earlier active observations remain historical.
 
-- [x] Replace direct `type="number"` usage with a shared numeric input that does not display browser spinner arrows.
-- [x] Keep an editable draft value separate from the committed numeric value so temporarily clearing a field does not immediately store zero.
-- [x] Display a formatted read-only value when the field is not being edited and a clean raw value while editing.
-- [x] Commit edits on Enter or blur and cancel the current edit on Escape.
-- [x] Support appropriate decimal precision and formatting for money, percentages, quantities, FX rates, years, and plain numeric values.
-- [x] Add configurable minimum, maximum, precision, and empty-value behavior.
-- [x] Reject malformed, non-finite, and out-of-range values with an inline message instead of coercing them to zero.
-- [x] Prevent mouse-wheel changes from accidentally modifying focused numeric inputs.
-- [x] Create reusable `MoneyInput`, `PercentageInput`, `QuantityInput`, and `FxRateInput` variants where their behavior differs.
+## Milestone 3 — Remove unused product features and code
 
-## Milestone 2 — Currency selector
+- [x] Remove contribution and withdrawal controls and contribution-adjusted calculations.
+- [x] Remove the annual income and costs section, helpers, tests, and components.
+- [x] Remove cost-basis and gain/loss controls, calculations, and columns.
+- [x] Remove acquisition date, valuation date, valuation notes, and asset-status controls.
+- [x] Remove priority-debt controls and the unused legacy rebalance engine, component, and tests.
+- [x] Remove obsolete state, props, callbacks, imports, and sample-data fields.
 
-- [x] Create a shared currency selector for the base currency and asset pricing currency.
-- [x] List commonly used currencies first: EUR, USD, GBP, CHF, CZK, PLN, HUF, JPY, CAD, and AUD.
-- [x] Include currencies already referenced by the open portfolio without duplicating common entries.
-- [x] Add an `Other…` option that reveals a custom currency-code input.
-- [x] Normalize custom codes to uppercase and validate them as three-letter currency codes supported by `Intl.NumberFormat`.
-- [x] Preserve an existing custom currency when editing a portfolio or asset.
-- [x] Show a clear validation message for an invalid or unsupported code.
-- [x] When asset pricing currency equals the base currency, lock the FX rate to 1 and explain why.
-- [x] When currencies differ, require a positive FX rate and warn when the default value of 1 has not been reviewed.
-- [x] Use the shared selector in General settings, asset creation, asset editing, and any future currency entry point.
+## Milestone 4 — Focus the dashboard and tables
 
-## Milestone 3 — Shared modal framework
+- [x] Add workflow navigation ordered as Update portfolio, Analysis, and Guidance, with Update portfolio opening by default.
+- [x] Add independent exact-scope toggles to Update portfolio so any combination of Total-only, Investable-only, and Financial assets can be updated while keeping Guidance independent and based on the latest snapshot.
+- [x] Put Net Worth, Total Assets, Liabilities, Investable Assets, Financial Portfolio, and Required Cash Reserve totals in Analysis, while keeping Available to Invest in Guidance.
+- [x] Add category and percentage legends to allocation pie charts, including the held target view, with stable category colors across chart states and asset-type history.
+- [x] Show every concentration dimension as a synchronized pie-chart overview while retaining the sortable detailed table.
+- [x] Keep Total, Investable, and Financial analysis filters without duplicating headline values.
+- [x] Keep Guidance as the final focused workflow step after portfolio analysis.
+- [x] Remove the unchanged Investable Assets after-transfer comparison.
+- [x] Simplify the asset table to Name, Type, Current Value, Portfolio Role, and Edit while retaining prior-snapshot deltas.
+- [x] Preserve quick inline Current Value editing for the latest snapshot while keeping history read-only.
+- [x] Simplify asset concentration editing with direct 100% category selectors and progressive disclosure for percentage splits.
+- [x] Keep concentration details visible in a compact two-column asset dialog that fits the normal form on a desktop viewport.
+- [x] Simplify the liability table to Name, Type, Balance, and Edit.
+- [x] Keep history charts, periods, chart modes, snapshot tabs, and historical read-only behavior.
+- [x] Let checking accounts specify a Reserve to keep while equally dividing the remaining global reserve among accounts left automatic.
+- [x] Designate one Financial cash asset as the investment cash destination and enforce a single destination in the current snapshot.
+- [x] Guide reserve replenishment before proportional checking-to-investment-cash transfers and the existing next-investment allocation.
 
-- [x] Create a reusable modal shell with a fixed header, scrollable content area, and fixed footer.
-- [x] Keep the title and primary actions visible regardless of content scroll position.
-- [x] Close ordinary dialogs with Escape.
-- [x] If a modal draft contains changes, confirm before Escape, Close, or backdrop dismissal discards them.
-- [x] Standardize modal actions: Delete on the left; Cancel and Save/Add on the right.
-- [x] Replace emoji-only modal actions with visible labels and consistent icons.
-- [x] Lock background scrolling while a modal is open.
-- [x] Prevent multiple modal layers except for an intentional confirmation dialog.
-- [x] Convert asset, liability, annual-income, snapshot, JSON, and confirmation dialogs to the shared shell.
-- [x] Keep the full-screen Settings workspace separate from the standard modal shell while preserving its current section navigation.
+## Milestone 5 — Preserve configuration and integrations
 
-## Milestone 4 — Validation and safe data entry
+- [x] Keep all Settings navigation sections and their existing configuration capabilities.
+- [x] Keep portfolio scopes and recommendation flags because they drive the guidance model.
+- [x] Keep asset/liability type management, dimensions, strategy rules, storage, Drive, and JSON editing.
+- [x] Show only explicitly added strategy categories, hiding zero targets while preserving explicit zero minimum/maximum bounds.
+- [x] Add a segmented target-allocation bar whose whole-percentage drag, keyboard, add, remove, and exact-value interactions preserve a 100% total.
+- [x] Preserve Google Drive initialization failure handling.
 
-- [x] Add shared field-error and form-error presentation.
-- [x] Make asset and liability names required and show an error beside an empty name.
-- [x] Validate ownership share as greater than 0 and no more than 100.
-- [x] Validate monetary values, quantities, cost basis, income, and costs against their permitted negative/positive rules.
-- [x] Require FX rates to be greater than zero.
-- [x] Validate percentage allocations within 0–100 and retain the existing total-allocation checks.
-- [x] Validate minimum/maximum strategy pairs and reject a minimum greater than its maximum.
-- [x] Validate acquisition and valuation dates and explain conflicting dates.
-- [x] Show an explicit error when a snapshot is moved to a month that already contains a check-in.
-- [x] Disable Save/Add only when the form cannot be submitted, while keeping the reason visible.
-- [x] Remove silent `Number(value) || 0` coercion from user-entry paths.
+## Milestone 6 — Verification and delivery
 
-## Milestone 5 — Asset form simplification
-
-- [x] Divide the asset form into clear sections: Basics, Valuation, Portfolio Classification, and Advanced Details.
-- [x] Keep Basics and Valuation open by default; make detailed concentration dimensions and notes collapsible.
-- [x] Start a new asset with an empty name and an asset-type-based placeholder instead of saving a generic type name accidentally.
-- [x] Show fields conditionally when they apply to the selected asset type.
-- [x] Only show the checking-account cash-reserve option for cash assets.
-- [x] Explain how `Eligible for additional investment` affects surplus recommendations.
-- [x] Make valuation mode labels and behavior clear when switching between direct value and quantity × unit price.
-- [x] Preserve values from the inactive valuation mode without including them in calculations.
-- [x] Replace internal rule labels such as `na` and `locked` with user-facing descriptions.
-- [x] Summarize collapsed concentration dimensions with their selected category or allocation status.
-
-## Milestone 6 — Safe inline table editing
-
-- [x] Convert asset and liability inline numeric cells to the shared formatted numeric controls.
-- [x] Keep the stored value unchanged until an edit is committed.
-- [x] Provide a visible edited-state indicator while a cell contains an uncommitted change.
-- [x] Allow Escape to restore the previous cell value.
-- [x] Show a short-lived Undo action after committing an inline change.
-- [x] Keep the existing color-coded snapshot and gain/loss deltas.
-- [x] Do not allow inline edits in historical snapshots.
-- [x] Ensure switching rows or snapshots resolves an active edit predictably.
-
-## Milestone 7 — Discoverable editing and check-ins
-
-- [x] Preserve double-click-to-edit for asset and liability rows as a shortcut.
-- [x] Add a visible Edit action for each editable asset and liability row.
-- [x] Preserve double-click-to-edit for snapshot tabs as a shortcut.
-- [x] Add a visible snapshot action for editing its month, contributions, and withdrawals.
-- [x] Replace the dashed implicit current-month tab with a clearly labeled `+ New check-in` action.
-- [x] Explain that only one check-in can exist per month before a duplicate is attempted.
-- [x] Distinguish the selected historical snapshot from the editable latest snapshot more clearly.
-- [x] Add concise helper text where an interaction is otherwise hidden or unusual.
-
-## Milestone 8 — Consistent creation and deletion flows
-
-- [x] Replace native browser prompts used for new asset types, liability types, and dimension values with application dialogs.
-- [x] Validate new names and prevent empty or confusing duplicate names.
-- [x] Replace native browser alerts with inline dependency explanations or application dialogs.
-- [x] Use confirmation for every destructive removal, including income records and unused settings definitions.
-- [x] Name the item being deleted and summarize important consequences in the confirmation dialog.
-- [x] Keep protected definitions disabled and show exactly which portfolio records still reference them.
-- [x] Offer Undo after deletions where restoration can be implemented safely.
-- [x] Preserve the existing rule that Delete appears on the left of modal actions and uses a red trash icon.
-
-## Milestone 9 — Save, close, and operation feedback
-
-- [x] Replace the ambiguous dirty dot with visible `Unsaved changes` and `Saved` status text.
-- [x] Show the most recent successful save time.
-- [x] Disable the Save action and show `Saving…` while a save is in progress.
-- [x] Prevent duplicate save, open, and Drive operations while one is already running.
-- [x] Show operation errors next to the action that failed, while retaining the existing global error summary where useful.
-- [x] Warn before closing or reloading the browser when the portfolio has unsaved changes.
-- [x] Rename the main Close action to make clear that it closes the portfolio file.
-- [x] Make close behavior explicit when changes are pending: Save and close, Close without saving, or Cancel.
-- [x] Fix closing the sample portfolio so it returns to the opening screen instead of doing nothing.
-- [x] Keep Google Drive discovery failure handling unchanged: show the error and disable Drive operations.
-
-## Milestone 10 — Verification and delivery
-
-- [x] Add unit tests for numeric parsing, formatting, range validation, draft/commit behavior, and Escape cancellation.
-- [x] Add tests for common, referenced, and custom currency selection.
-- [x] Add modal tests for fixed structure, Escape behavior, dirty-draft confirmation, and action placement.
-- [x] Add form tests for required fields, percentage constraints, FX behavior, and duplicate snapshot-month feedback.
-- [x] Add tests for inline edit commit, cancellation, and undo.
-- [x] Add tests for explicit save/close choices and sample-portfolio closing.
-- [x] Verify existing portfolio calculations, file conversion, strategy, Google Drive, and editor tests remain green.
-- [x] Exercise every converted modal and input flow in a real desktop browser.
-- [x] Confirm no existing portfolio fields are lost when forms are opened, edited, cancelled, or saved.
-- [x] Bump the application version.
-- [x] If the portfolio file structure changes, bump its version and add a conversion function with a corresponding unit test.
+- [x] Update affected unit tests and add v8, v9, and v10 conversion coverage.
+- [x] Verify removed fields and features have no remaining runtime references.
 - [x] Run the complete automated test suite.
+- [x] Bump the package version.
 - [ ] Run plain `npm run build` using the existing Google credential environment variables.
-- [ ] Commit the regenerated `docs` production site with the implementation changes.
+- [ ] Review and commit the regenerated `docs` production site with all implementation changes.

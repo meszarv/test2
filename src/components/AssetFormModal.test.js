@@ -49,10 +49,40 @@ test('AssetFormModal shows migration review warning and disables a locked scope'
 
 test('AssetFormModal applies an asset-type scope default to new assets', () => {
   const markup = renderForm({ asset: null, scopeRule: { mode: 'default', value: 'financial' } });
+  const document = new JSDOM(markup).window.document;
   const select = scopeSelect(markup);
   assert.ok(select);
   assert.equal(select.disabled, false);
   assert.equal(select.value, 'financial');
+  assert.ok(document.querySelector('select[aria-label="Geography category"]'));
+  assert.equal(Array.from(document.querySelectorAll('button')).some((button) => button.getAttribute('aria-expanded') != null && button.textContent.includes('Concentration details')), false);
+  assert.doesNotMatch(markup, /Cost basis|acquisition date|Valuation date|Valuation notes|Status/);
+});
+
+test('AssetFormModal exposes checking reserve and investment cash roles for cash assets', () => {
+  const markup = renderToStaticMarkup(React.createElement(AssetFormModal, {
+    open: true,
+    asset: {
+      id: 'cash-1',
+      name: 'Checking',
+      type: 'cash',
+      portfolioScope: 'investable',
+      ownershipShare: 100,
+      value: 5000,
+      isCheckingAccount: true,
+      reserveToKeep: 2000,
+    },
+    assetTypes: { cash: { name: 'Cash', scopeRule: { mode: 'default', value: 'investable' }, dimensionRules: {} } },
+    dimensions: cloneDefaults(defaultDimensions),
+    currency: 'EUR',
+    onSave: () => {},
+    onClose: () => {},
+  }));
+
+  assert.match(markup, /Cash-reserve checking account/);
+  assert.match(markup, /Reserve to keep \(EUR\)/);
+  assert.match(markup, /Investment cash destination/);
+  assert.match(markup, /Equal share of remaining reserve/);
 });
 
 test('saving an asset confirms and clears its migration review marker', async () => {

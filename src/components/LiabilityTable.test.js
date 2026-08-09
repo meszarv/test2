@@ -21,6 +21,6 @@ test('LiabilityTable lists liabilities and types', () => {
   });
   assert.match(markup, /Loan A/);
   assert.match(markup, /Loan/);
-  assert.match(markup, /type="checkbox"/);
-  assert.match(markup, /checked/);
+  assert.match(markup, /Balance/);
+  assert.doesNotMatch(markup, /Priority|type="checkbox"/);
 });

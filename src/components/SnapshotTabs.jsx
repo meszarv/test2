@@ -1,7 +1,6 @@
 import { useState } from "react";
 import ConfirmModal from "./ConfirmModal.jsx";
 import Modal from "./Modal.jsx";
-import { MoneyInput } from "./NumberInput.jsx";
 import TextInput from "./TextInput.jsx";
 import UndoToast from "./UndoToast.jsx";
 
@@ -15,15 +14,11 @@ export default function SnapshotTabs({
   onSelect,
   onAdd,
   onChangeDate,
-  onChangeCashFlow,
   onDelete,
   onRestore,
-  currency = "EUR",
 }) {
   const [editIndex, setEditIndex] = useState(null);
   const [editValue, setEditValue] = useState("");
-  const [contributions, setContributions] = useState("");
-  const [withdrawals, setWithdrawals] = useState("");
   const [original, setOriginal] = useState(null);
   const [deleteIndex, setDeleteIndex] = useState(null);
   const [undo, setUndo] = useState(null);
@@ -37,25 +32,20 @@ export default function SnapshotTabs({
     if (!snapshot) return;
     const next = {
       month: new Date(snapshot.asOf).toISOString().slice(0, 7),
-      contributions: snapshot.contributions === 0 ? "" : String(snapshot.contributions || ""),
-      withdrawals: snapshot.withdrawals === 0 ? "" : String(snapshot.withdrawals || ""),
     };
     setEditValue(next.month);
-    setContributions(next.contributions);
-    setWithdrawals(next.withdrawals);
     setOriginal(next);
     setEditIndex(index);
   }
 
   const duplicateMonth = editIndex != null && hasSnapshotMonthConflict(snapshots, editIndex, editValue);
-  const dirty = original && (editValue !== original.month || String(contributions) !== original.contributions || String(withdrawals) !== original.withdrawals);
+  const dirty = original && editValue !== original.month;
 
   function save(event) {
     event.preventDefault();
     if (!editValue || duplicateMonth) return;
     const [year, month] = editValue.split("-");
     onChangeDate(editIndex, new Date(Number(year), Number(month) - 1, 1));
-    onChangeCashFlow?.(editIndex, contributions === "" ? 0 : contributions, withdrawals === "" ? 0 : withdrawals);
     setEditIndex(null);
   }
 
@@ -94,7 +84,7 @@ export default function SnapshotTabs({
       <Modal
         open={editIndex !== null}
         title="Edit check-in"
-        description="Change the month or record external money added and withdrawn."
+        description="Change the month represented by this state snapshot."
         onClose={() => setEditIndex(null)}
         dirty={!!dirty}
         onSubmit={save}
@@ -102,14 +92,7 @@ export default function SnapshotTabs({
         deleteAction={<button type="button" onClick={() => setDeleteIndex(editIndex)} className="rounded-lg bg-red-700 px-4 py-2 text-sm hover:bg-red-600">🗑️ Delete check-in</button>}
         primaryAction={<button type="submit" disabled={!editValue || duplicateMonth} className="rounded-lg bg-blue-600 px-4 py-2 text-sm hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40">Save check-in</button>}
       >
-        <div className="space-y-4">
-          <TextInput autoFocus label="Month" type="month" value={editValue} onChange={setEditValue} error={duplicateMonth ? "A check-in already exists for this month." : ""} required />
-          <div className="grid grid-cols-2 gap-3">
-            <MoneyInput label={`External contributions (${currency})`} currency={currency} value={contributions} required={false} onChange={setContributions} />
-            <MoneyInput label={`External withdrawals (${currency})`} currency={currency} value={withdrawals} required={false} onChange={setWithdrawals} />
-          </div>
-          <p className="text-xs text-zinc-500">These totals separate portfolio growth from money added or withdrawn.</p>
-        </div>
+        <TextInput autoFocus label="Month" type="month" value={editValue} onChange={setEditValue} error={duplicateMonth ? "A check-in already exists for this month." : ""} required />
       </Modal>
       <ConfirmModal open={deleteIndex !== null} title="Delete check-in?" message={deleteIndex == null ? "" : `Delete the ${fmt(new Date(snapshots[deleteIndex]?.asOf))} check-in and its recorded portfolio history?`} onConfirm={confirmDelete} onCancel={() => setDeleteIndex(null)} />
       <UndoToast message={undo ? "Check-in deleted." : ""} onUndo={() => { if (!undo) return; onRestore?.(undo.snapshot, undo.index); setUndo(null); }} onDismiss={() => setUndo(null)} />

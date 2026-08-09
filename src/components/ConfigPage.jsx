@@ -33,7 +33,7 @@ function GeneralSettings({ currency, setCurrency, assets, referencedCurrencies =
 
 function PortfolioViewSettings({ assets, liabilities, currency, onReviewScopes }) {
   const metrics = useMemo(() => portfolioMetrics(assets, liabilities), [assets, liabilities]);
-  const active = (assets || []).filter((asset) => asset.status !== "closed" && asset.status !== "sold");
+  const active = assets || [];
   const counts = {
     total: active.length,
     investable: active.filter((asset) => assetInPortfolioView(asset, "investable")).length,
@@ -146,10 +146,11 @@ export default function ConfigPage({
   const firstSectionRender = useRef(true);
   const targetIssues = Object.values(strategy.dimensionPolicies || {}).filter((policy) => {
     if (policy.mode !== "target") return false;
-    const total = Object.values(policy.categories || {}).reduce((sum, category) => sum + (Number(category.target) || 0), 0);
-    return Math.abs(total - 100) >= 0.01;
+    const categories = Object.values(policy.categories || {});
+    const total = categories.reduce((sum, category) => sum + (Number(category.target) || 0), 0);
+    return Math.abs(total - 100) >= 0.01 || categories.some((category) => Number(category.target) > 0 && !Number.isInteger(Number(category.target)));
   }).length;
-  const reviewCount = (assets || []).filter((asset) => asset.scopeNeedsReview && asset.status !== "closed" && asset.status !== "sold").length;
+  const reviewCount = (assets || []).filter((asset) => asset.scopeNeedsReview).length;
   const issueCounts = { views: reviewCount, strategy: targetIssues };
 
   useEffect(() => {

@@ -163,7 +163,7 @@ export const portfolioViews = {
 
 export const portfolioScopeOptions = {
   total: { name: "Total only", description: "Material wealth outside accessible investment capital." },
-  investable: { name: "Investable", description: "Accessible capital outside or inside the managed strategy." },
+  investable: { name: "Investable only", description: "Accessible capital outside the managed Financial Portfolio." },
   financial: { name: "Financial Portfolio", description: "Assets actively managed under the investment strategy." },
 };
 
@@ -229,31 +229,46 @@ export function normalizeAsset(asset = {}, assetTypes = defaultAssetTypes) {
     description: asset.description || "",
     ownership: asset.ownership || "personal",
     ownershipShare: asset.ownershipShare == null ? 100 : Number(asset.ownershipShare),
-    acquiredOn: asset.acquiredOn || "",
-    status: asset.status || "active",
     pricingCurrency: asset.pricingCurrency || "EUR",
     valuationMode: asset.valuationMode || "total",
     isCheckingAccount: asset.isCheckingAccount == null ? type === "cash" : !!asset.isCheckingAccount,
+    reserveToKeep: asset.reserveToKeep === "" || asset.reserveToKeep == null ? "" : Math.max(0, Number(asset.reserveToKeep) || 0),
+    isInvestmentCashAccount: !!asset.isInvestmentCashAccount,
     eligibleForInvestment: asset.eligibleForInvestment == null ? type !== "cash" : !!asset.eligibleForInvestment,
     dimensions: cloneDefaults(asset.dimensions || {}),
     quantity: Number(asset.quantity) || 0,
     unitPrice: Number(asset.unitPrice) || 0,
     fxRate: asset.fxRate == null ? 1 : Number(asset.fxRate) || 0,
     value: Number(asset.value) || 0,
-    costBasis: Number(asset.costBasis) || 0,
-    valuationDate: asset.valuationDate || "",
-    notes: asset.notes || "",
   };
-  return applyAssetTypeRules(normalized, assetTypes, false);
+  const withRules = applyAssetTypeRules(normalized, assetTypes, false);
+  if (withRules.type !== "cash") {
+    withRules.isCheckingAccount = false;
+    withRules.reserveToKeep = "";
+    withRules.isInvestmentCashAccount = false;
+  } else if (withRules.isInvestmentCashAccount) {
+    withRules.portfolioScope = "financial";
+    withRules.isCheckingAccount = false;
+    withRules.reserveToKeep = "";
+    withRules.eligibleForInvestment = false;
+  }
+  return withRules;
 }
 
 export function normalizeStoredAsset(asset = {}, assetTypes = defaultAssetTypes) {
   const normalized = normalizeAsset(asset, assetTypes);
-  return {
+  const stored = {
     ...normalized,
     portfolioScope: validPortfolioScope(asset.portfolioScope) ? asset.portfolioScope : normalized.portfolioScope,
     scopeNeedsReview: !!asset.scopeNeedsReview,
   };
+  if (stored.isInvestmentCashAccount) {
+    stored.portfolioScope = "financial";
+    stored.isCheckingAccount = false;
+    stored.reserveToKeep = "";
+    stored.eligibleForInvestment = false;
+  }
+  return stored;
 }
 
 export function applyAssetTypeRules(asset, assetTypes, overwriteDefaults = false) {
@@ -282,20 +297,13 @@ export function applyAssetTypeRules(asset, assetTypes, overwriteDefaults = false
 }
 
 export function assetValue(asset) {
-  if (!asset || asset.status === "closed" || asset.status === "sold") return 0;
+  if (!asset) return 0;
   const fx = asset.fxRate == null ? 1 : Number(asset.fxRate) || 0;
   const gross = asset.valuationMode === "units"
     ? (Number(asset.quantity) || 0) * (Number(asset.unitPrice) || 0) * fx
     : (Number(asset.value) || 0) * fx;
   const share = asset.ownershipShare == null ? 1 : Math.max(0, Number(asset.ownershipShare) || 0) / 100;
   return gross * share;
-}
-
-export function costBasisValue(asset) {
-  if (!asset) return 0;
-  const fx = asset.fxRate == null ? 1 : Number(asset.fxRate) || 0;
-  const share = asset.ownershipShare == null ? 1 : Math.max(0, Number(asset.ownershipShare) || 0) / 100;
-  return (Number(asset.costBasis) || 0) * fx * share;
 }
 
 export function netWorth(assets, liabilities) {
@@ -323,7 +331,6 @@ export function assetsForPortfolioView(assets, view = "total") {
 export function assetTotalForView(assets, view = "total", valueOverrides = {}) {
   return (assets || []).reduce((sum, asset) => {
     if (!assetInPortfolioView(asset, view)) return sum;
-    if (asset.status === "closed" || asset.status === "sold") return sum;
     const value = Object.prototype.hasOwnProperty.call(valueOverrides, asset.id)
       ? Number(valueOverrides[asset.id]) || 0
       : assetValue(asset);
@@ -374,7 +381,6 @@ export function currentByDimension(assets, key, assetTypes = {}, valueOverrides 
   const amounts = {};
   for (const asset of assets || []) {
     if (!assetInPortfolioView(asset, portfolioView)) continue;
-    if (asset.status === "closed" || asset.status === "sold") continue;
     const value = Object.prototype.hasOwnProperty.call(valueOverrides, asset.id)
       ? Number(valueOverrides[asset.id]) || 0
       : assetValue(asset);
@@ -462,60 +468,224 @@ function worsensMaximumLimit(assets, strategy, assetTypes, dimensions, currentVa
   return false;
 }
 
-export function recommendSurplusCash(assets, strategy, assetTypes = {}, dimensions = {}) {
-  const activeAssets = (assets || []).filter((asset) => asset.status !== "closed" && asset.status !== "sold");
-  const checking = activeAssets.filter((asset) => asset.isCheckingAccount && assetInPortfolioView(asset, "investable"));
-  const checkingCash = checking.reduce((sum, asset) => sum + assetValue(asset), 0);
+function proportionalFlows(sources, destinations, total, kind) {
+  const sourceTotal = sources.reduce((sum, item) => sum + item.amount, 0);
+  const destinationTotal = destinations.reduce((sum, item) => sum + item.amount, 0);
+  if (total <= 0 || sourceTotal <= 0 || destinationTotal <= 0) return [];
+  const sourceRemaining = sources.map((item) => ({ ...item, remaining: total * item.amount / sourceTotal }));
+  const destinationRemaining = destinations.map((item) => ({ ...item, remaining: total * item.amount / destinationTotal }));
+  const flows = [];
+  let sourceIndex = 0;
+  let destinationIndex = 0;
+  while (sourceIndex < sourceRemaining.length && destinationIndex < destinationRemaining.length) {
+    const source = sourceRemaining[sourceIndex];
+    const destination = destinationRemaining[destinationIndex];
+    const amount = Math.min(source.remaining, destination.remaining);
+    if (amount > 1e-9) {
+      flows.push({
+        kind,
+        fromAssetId: source.asset.id,
+        fromName: source.asset.name,
+        toAssetId: destination.asset.id,
+        toName: destination.asset.name,
+        amount,
+      });
+    }
+    source.remaining -= amount;
+    destination.remaining -= amount;
+    if (source.remaining <= 1e-9) sourceIndex += 1;
+    if (destination.remaining <= 1e-9) destinationIndex += 1;
+  }
+  return flows;
+}
+
+export function planCashTransfers(assets, strategy) {
+  const activeAssets = assets || [];
+  const checkingAccounts = activeAssets.filter((asset) => asset.isCheckingAccount && assetInPortfolioView(asset, "investable"));
+  const investmentCashAccounts = activeAssets.filter((asset) => asset.type === "cash" && asset.portfolioScope === "financial" && asset.isInvestmentCashAccount);
+  const investmentCashAccount = investmentCashAccounts.length === 1 ? investmentCashAccounts[0] : null;
   const reserveTarget = Math.max(0, Number(strategy?.cashReserveTarget) || 0);
-  const surplus = Math.max(0, checkingCash - reserveTarget);
-  const candidates = activeAssets.filter((asset) => asset.portfolioScope === "financial" && asset.eligibleForInvestment && !asset.isCheckingAccount);
-  const initialValues = Object.fromEntries(activeAssets.map((asset) => [asset.id, assetValue(asset)]));
-  const result = {
+  const checkingCash = checkingAccounts.reduce((sum, asset) => sum + assetValue(asset), 0);
+  const explicitAccounts = checkingAccounts.filter((asset) => asset.reserveToKeep !== "" && asset.reserveToKeep != null);
+  const automaticAccounts = checkingAccounts.filter((asset) => asset.reserveToKeep === "" || asset.reserveToKeep == null);
+  const explicitReserve = explicitAccounts.reduce((sum, asset) => sum + Math.max(0, Number(asset.reserveToKeep) || 0), 0);
+  const automaticReserve = automaticAccounts.length ? Math.max(0, reserveTarget - explicitReserve) / automaticAccounts.length : 0;
+  const accountReserves = checkingAccounts.map((asset) => ({
+    assetId: asset.id,
+    name: asset.name,
+    current: assetValue(asset),
+    reserve: asset.reserveToKeep === "" || asset.reserveToKeep == null
+      ? automaticReserve
+      : Math.max(0, Number(asset.reserveToKeep) || 0),
+    assignment: asset.reserveToKeep === "" || asset.reserveToKeep == null ? "Equal share" : "Specified",
+  }));
+  const assignedReserve = accountReserves.reduce((sum, account) => sum + account.reserve, 0);
+  const effectiveReserveTarget = Math.max(reserveTarget, assignedReserve);
+  const warnings = [];
+  if (explicitReserve > reserveTarget + 0.01) {
+    warnings.push("Specified account reserves exceed the global cash-reserve target; the higher account total is used.");
+  } else if (!automaticAccounts.length && assignedReserve < reserveTarget - 0.01) {
+    warnings.push("Part of the global cash reserve is not assigned because every checking account has a specified amount.");
+  }
+  if (investmentCashAccounts.length > 1) {
+    warnings.push("More than one investment cash destination is selected. Choose exactly one before transferring cash.");
+  }
+
+  const projectedValues = Object.fromEntries(activeAssets.map((asset) => [asset.id, assetValue(asset)]));
+  const transfers = [];
+  function applyFlows(flows) {
+    for (const flow of flows) {
+      projectedValues[flow.fromAssetId] = Math.max(0, (projectedValues[flow.fromAssetId] || 0) - flow.amount);
+      projectedValues[flow.toAssetId] = (projectedValues[flow.toAssetId] || 0) + flow.amount;
+      transfers.push(flow);
+    }
+  }
+
+  const reserveById = new Map(accountReserves.map((account) => [account.assetId, account.reserve]));
+  const checkingSources = () => checkingAccounts
+    .map((asset) => ({ asset, amount: Math.max(0, (projectedValues[asset.id] || 0) - (reserveById.get(asset.id) || 0)) }))
+    .filter((item) => item.amount > 0.01);
+  const checkingDeficits = () => checkingAccounts
+    .map((asset) => ({ asset, amount: Math.max(0, (reserveById.get(asset.id) || 0) - (projectedValues[asset.id] || 0)) }))
+    .filter((item) => item.amount > 0.01);
+
+  let sources = checkingSources();
+  let deficits = checkingDeficits();
+  const internalTransfer = Math.min(
+    sources.reduce((sum, item) => sum + item.amount, 0),
+    deficits.reduce((sum, item) => sum + item.amount, 0)
+  );
+  applyFlows(proportionalFlows(sources, deficits, internalTransfer, "replenish"));
+
+  deficits = checkingDeficits();
+  if (deficits.length && investmentCashAccount) {
+    const remainingDeficit = deficits.reduce((sum, item) => sum + item.amount, 0);
+    const availableInvestmentCash = Math.max(0, projectedValues[investmentCashAccount.id] || 0);
+    const replenishment = Math.min(remainingDeficit, availableInvestmentCash);
+    applyFlows(proportionalFlows(
+      [{ asset: investmentCashAccount, amount: availableInvestmentCash }],
+      deficits,
+      replenishment,
+      "replenish"
+    ));
+  }
+
+  deficits = checkingDeficits();
+  const reserveShortfall = deficits.reduce((sum, item) => sum + item.amount, 0);
+  const checkingCashAfterReplenishment = checkingAccounts.reduce((sum, asset) => sum + (projectedValues[asset.id] || 0), 0);
+  const surplus = reserveShortfall <= 0.01
+    ? Math.max(0, checkingCashAfterReplenishment - effectiveReserveTarget)
+    : 0;
+  let transferableSurplus = 0;
+  if (surplus > 0.01 && investmentCashAccount) {
+    sources = checkingSources();
+    transferableSurplus = Math.min(surplus, sources.reduce((sum, item) => sum + item.amount, 0));
+    applyFlows(proportionalFlows(
+      sources,
+      [{ asset: investmentCashAccount, amount: transferableSurplus }],
+      transferableSurplus,
+      "invest"
+    ));
+  }
+
+  const projectedAccountReserves = accountReserves.map((account) => ({
+    ...account,
+    projected: projectedValues[account.assetId] || 0,
+  }));
+  let reason;
+  if (!checkingAccounts.length) {
+    reason = "No checking accounts are configured for the cash reserve.";
+  } else if (reserveShortfall > 0.01) {
+    reason = investmentCashAccount
+      ? "Checking-account reserves remain underfunded after using the available investment cash."
+      : "Checking-account reserves are underfunded; choose an investment cash destination to replenish them.";
+  } else if (surplus > 0.01 && !investmentCashAccount) {
+    reason = "Cash is available to invest; choose one Financial cash asset as the investment cash destination.";
+  } else if (transferableSurplus > 0.01) {
+    reason = "Checking-account reserves are funded and the remaining cash can be transferred for investment.";
+  } else if (transfers.some((transfer) => transfer.kind === "replenish")) {
+    reason = "Checking-account reserves can be fully replenished; no surplus remains to invest.";
+  } else {
+    reason = "Checking-account cash is allocated to the configured reserves.";
+  }
+
+  return {
     checkingCash,
     reserveTarget,
+    effectiveReserveTarget,
+    assignedReserve,
+    accountReserves: projectedAccountReserves,
+    investmentCashAccount,
+    investmentCashAccounts,
+    transfers,
+    reserveShortfall,
     surplus,
+    transferableSurplus,
+    projectedValues,
+    warnings,
+    reason,
+  };
+}
+
+export function recommendSurplusCash(assets, strategy, assetTypes = {}, dimensions = {}) {
+  const activeAssets = assets || [];
+  const routing = planCashTransfers(activeAssets, strategy);
+  const candidates = activeAssets.filter((asset) => asset.portfolioScope === "financial" && asset.eligibleForInvestment && !asset.isCheckingAccount && !asset.isInvestmentCashAccount);
+  const initialValues = Object.fromEntries(activeAssets.map((asset) => [asset.id, assetValue(asset)]));
+  const result = {
+    ...routing,
     plan: [],
     currentValues: initialValues,
-    projectedValues: { ...initialValues },
+    projectedValues: { ...routing.projectedValues },
     currentMetrics: portfolioMetrics(activeAssets, [], initialValues),
-    projectedMetrics: portfolioMetrics(activeAssets, [], initialValues),
+    projectedMetrics: portfolioMetrics(activeAssets, [], routing.projectedValues),
     unallocated: 0,
     reason: "",
   };
-  if (surplus <= 0) {
-    result.reason = "Checking-account cash is within the configured reserve.";
+  if (routing.reserveShortfall > 0.01) {
+    result.reason = routing.reason;
+    return result;
+  }
+  if (routing.surplus > 0.01 && !routing.investmentCashAccount) {
+    result.reason = routing.reason;
+    return result;
+  }
+  if (routing.transferableSurplus <= 0.01) {
+    result.reason = routing.reason;
     return result;
   }
   if (!candidates.length) {
     result.reason = "No assets are marked as eligible for additional investment.";
+    result.unallocated = routing.transferableSurplus;
     return result;
   }
 
-  const baseValues = { ...initialValues };
-  for (const asset of checking) {
-    const current = baseValues[asset.id] || 0;
-    const share = checkingCash > 0 ? current / checkingCash : 0;
-    baseValues[asset.id] = Math.max(0, current - surplus * share);
-  }
+  const baseValues = { ...routing.projectedValues };
   const configured = strategyPenalty(activeAssets, strategy, assetTypes, dimensions, baseValues).activePolicies;
   if (!configured) {
     result.reason = "Configure at least one target allocation or limit to generate an investment plan.";
+    result.unallocated = routing.transferableSurplus;
     return result;
   }
 
   const allocations = Object.fromEntries(candidates.map((asset) => [asset.id, 0]));
   const steps = 100;
-  const block = surplus / steps;
+  const block = routing.transferableSurplus / steps;
   const projected = { ...baseValues };
   for (let index = 0; index < steps; index += 1) {
     let best = null;
     for (const candidate of candidates) {
-      const trial = { ...projected, [candidate.id]: (projected[candidate.id] || 0) + block };
+      const trial = {
+        ...projected,
+        [routing.investmentCashAccount.id]: Math.max(0, (projected[routing.investmentCashAccount.id] || 0) - block),
+        [candidate.id]: (projected[candidate.id] || 0) + block,
+      };
       if (worsensMaximumLimit(activeAssets, strategy, assetTypes, dimensions, projected, trial)) continue;
       const score = strategyPenalty(activeAssets, strategy, assetTypes, dimensions, trial).penalty;
       if (!best || score < best.score - 1e-9) best = { candidate, score };
     }
     if (!best) break;
+    projected[routing.investmentCashAccount.id] = Math.max(0, (projected[routing.investmentCashAccount.id] || 0) - block);
     projected[best.candidate.id] = (projected[best.candidate.id] || 0) + block;
     allocations[best.candidate.id] += block;
   }
@@ -525,14 +695,7 @@ export function recommendSurplusCash(assets, strategy, assetTypes = {}, dimensio
     .map((asset) => ({ assetId: asset.id, name: asset.name, amount: allocations[asset.id] }))
     .sort((a, b) => b.amount - a.amount);
   const allocatedTotal = Object.values(allocations).reduce((sum, amount) => sum + amount, 0);
-  result.unallocated = Math.max(0, surplus - allocatedTotal);
-  if (result.unallocated > 0) {
-    for (const asset of checking) {
-      const current = initialValues[asset.id] || 0;
-      const share = checkingCash > 0 ? current / checkingCash : 0;
-      result.projectedValues[asset.id] = (result.projectedValues[asset.id] || 0) + result.unallocated * share;
-    }
-  }
+  result.unallocated = Math.max(0, routing.transferableSurplus - allocatedTotal);
   result.projectedMetrics = portfolioMetrics(activeAssets, [], result.projectedValues);
   result.reason = result.plan.length
     ? result.unallocated > 0.01
@@ -540,87 +703,6 @@ export function recommendSurplusCash(assets, strategy, assetTypes = {}, dimensio
       : "The surplus is distributed to reduce the weighted strategy deviations."
     : "No eligible investment can receive the surplus without exceeding a configured maximum.";
   return result;
-}
-
-export function annualIncomeSummary(records, year = null) {
-  const filtered = (records || []).filter((record) => year == null || Number(record.year) === Number(year));
-  const grossFields = ["dividends", "interest", "rent", "distributions", "otherIncome"];
-  const costFields = ["fees", "repairs", "otherCosts"];
-  const gross = filtered.reduce((sum, record) => sum + grossFields.reduce((subtotal, field) => subtotal + (Number(record[field]) || 0), 0), 0);
-  const costs = filtered.reduce((sum, record) => sum + costFields.reduce((subtotal, field) => subtotal + (Number(record[field]) || 0), 0), 0);
-  return { gross, costs, net: gross - costs };
-}
-
-// Legacy category calculation retained for old rebalance behavior and compatibility tests.
-export function currentByCategory(assets, liabilities) {
-  const assetMap = {};
-  for (const asset of assets || []) {
-    const key = asset.type;
-    assetMap[key] = (assetMap[key] || 0) + (Number(asset.value) || 0);
-  }
-  const assetTotal = Object.values(assetMap).reduce((a, b) => a + b, 0);
-  const liabilityTotal = (liabilities || []).reduce((a, liability) => a + (Number(liability.value) || 0), 0);
-  if (assetTotal === 0) return {};
-  const ratio = liabilityTotal / assetTotal;
-  return Object.fromEntries(Object.entries(assetMap).map(([key, value]) => [key, value - value * ratio]));
-}
-
-export function normalizeAllocation(allocation) {
-  const total = Object.values(allocation).reduce((sum, value) => sum + (Number(value) || 0), 0) || 1;
-  return Object.fromEntries(Object.keys(allocation).map((key) => [key, (Number(allocation[key]) || 0) / total]));
-}
-
-export function rebalance(assets, liabilities, allocationPercentages) {
-  const adjustedAssets = (assets || []).map((asset) => ({ ...asset }));
-  const adjustedLiabilities = (liabilities || []).map((liability) => ({ ...liability }));
-  let cashAvailable = adjustedAssets.filter((asset) => asset.type === "cash").reduce((sum, asset) => sum + (Number(asset.value) || 0), 0);
-  const initialCash = cashAvailable;
-  for (const liability of adjustedLiabilities) {
-    if (!liability.priority) continue;
-    const payoff = Math.min(cashAvailable, Number(liability.value) || 0);
-    liability.value = (Number(liability.value) || 0) - payoff;
-    cashAvailable -= payoff;
-  }
-  const priorityPayoff = initialCash - cashAvailable;
-  const priorityDebt = adjustedLiabilities.filter((liability) => liability.priority).reduce((sum, liability) => sum + (Number(liability.value) || 0), 0);
-  const nonPriorityLiabilities = adjustedLiabilities.filter((liability) => !liability.priority);
-  const byCategoryBeforePayoff = currentByCategory(adjustedAssets, nonPriorityLiabilities);
-  let toDeduct = priorityPayoff;
-  for (const asset of adjustedAssets) {
-    if (asset.type !== "cash" || toDeduct <= 0) continue;
-    const available = Number(asset.value) || 0;
-    const used = Math.min(available, toDeduct);
-    asset.value = available - used;
-    toDeduct -= used;
-  }
-  const totalNow = netWorth(adjustedAssets, adjustedLiabilities);
-  const byCat = currentByCategory(adjustedAssets, nonPriorityLiabilities);
-  let normalized = normalizeAllocation(allocationPercentages);
-  if (!Object.keys(normalized).length) {
-    const categories = Object.keys(byCat);
-    const share = 1 / (categories.length || 1);
-    normalized = Object.fromEntries(categories.map((category) => [category, share]));
-  }
-  const categories = Array.from(new Set([...Object.keys(byCat), ...Object.keys(normalized)]));
-  const idealByCat = Object.fromEntries(categories.map((category) => [category, (normalized[category] || 0) * totalNow]));
-  const cashSurplus = Math.max(0, (byCat.cash || 0) - (idealByCat.cash || 0));
-  const gaps = Object.fromEntries(categories.filter((category) => category !== "cash").map((category) => [category, Math.max(0, (idealByCat[category] || 0) - (byCat[category] || 0))]));
-  const totalGaps = Object.values(gaps).reduce((sum, gap) => sum + gap, 0) || 1;
-  const investPlan = {};
-  if (cashSurplus > 0 && totalGaps > 0) {
-    investPlan.cash = -cashSurplus;
-    for (const category of Object.keys(gaps)) investPlan[category] = (gaps[category] / totalGaps) * cashSurplus;
-  }
-  return {
-    totalNow,
-    targetTotal: totalNow,
-    byCat,
-    idealByCat,
-    investPlan,
-    priorityDebt,
-    priorityPayoff,
-    cashCurrent: byCategoryBeforePayoff.cash || 0,
-  };
 }
 
 export function groupByPeriod(points, mode) {

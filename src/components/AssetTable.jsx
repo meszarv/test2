@@ -1,24 +1,32 @@
 import { useMemo, useState } from "react";
-import { assetValue, costBasisValue } from "../data.js";
+import { assetValue } from "../data.js";
 import { formatCurrency } from "../utils.js";
 import NumberInput from "./NumberInput.jsx";
 import UndoToast from "./UndoToast.jsx";
 
-function InlineNumber({ label, value, formatted, onCommit, readOnly, kind = "money", currency, precision, width = "w-32" }) {
-  if (readOnly) return <span className="block px-1 py-1 text-right">{formatted}</span>;
-  return (
-    <NumberInput
-      label={label}
-      value={value}
-      onChange={onCommit}
-      kind={kind}
-      currency={currency}
-      precision={precision}
-      min={0}
-      className={`${width} [&>span:first-child]:sr-only`}
-      inputClassName="border-transparent bg-transparent px-1 py-1 text-right hover:border-zinc-700 focus:bg-zinc-800"
-    />
-  );
+function portfolioRole(asset) {
+  if (asset.isInvestmentCashAccount) return "Investment cash destination";
+  if (asset.isCheckingAccount && asset.portfolioScope !== "total") return "Reserve cash";
+  if (asset.portfolioScope === "financial" && asset.eligibleForInvestment) return "Investment destination";
+  if (asset.portfolioScope === "financial") return "Managed investment";
+  if (asset.portfolioScope === "investable") return "Accessible capital";
+  return "Net-worth asset";
+}
+
+function currentValueFactor(asset) {
+  const fx = asset.fxRate == null ? 1 : Number(asset.fxRate) || 0;
+  const ownership = asset.ownershipShare == null ? 1 : Math.max(0, Number(asset.ownershipShare) || 0) / 100;
+  const quantity = asset.valuationMode === "units" ? Number(asset.quantity) || 0 : 1;
+  return fx * ownership * quantity;
+}
+
+export function withAssetCurrentValue(asset, currentValue) {
+  const factor = currentValueFactor(asset);
+  if (factor <= 0) return asset;
+  const rawValue = (Number(currentValue) || 0) / factor;
+  return asset.valuationMode === "units"
+    ? { ...asset, unitPrice: rawValue }
+    : { ...asset, value: rawValue };
 }
 
 export default function AssetTable({ assets, prevAssets, setAssets, assetTypes, currency = "EUR", readOnly = false, onEdit }) {
@@ -26,12 +34,14 @@ export default function AssetTable({ assets, prevAssets, setAssets, assetTypes, 
   const [undo, setUndo] = useState(null);
   const previousValues = useMemo(() => new Map((prevAssets || []).map((asset) => [asset.id, assetValue(asset)])), [prevAssets]);
 
-  function update(id, key, value) {
+  function updateCurrentValue(id, value) {
     if (readOnly) return;
     const previous = assets.find((asset) => asset.id === id);
-    if (!previous || Number(previous[key]) === Number(value)) return;
-    setUndo({ asset: previous, message: `${previous.name}: ${key === "costBasis" ? "cost basis" : key === "unitPrice" ? "unit price" : key} updated.` });
-    setAssets(assets.map((asset) => asset.id === id ? { ...asset, [key]: value } : asset));
+    if (!previous) return;
+    const updated = withAssetCurrentValue(previous, value);
+    if (updated === previous || assetValue(updated) === assetValue(previous)) return;
+    setUndo({ asset: previous, message: `${previous.name}: current value updated.` });
+    setAssets?.(assets.map((asset) => asset.id === id ? updated : asset));
   }
 
   const sortedAssets = useMemo(() => {
@@ -40,11 +50,8 @@ export default function AssetTable({ assets, prevAssets, setAssets, assetTypes, 
       const values = {
         name: [(left.name || "").toLowerCase(), (right.name || "").toLowerCase()],
         type: [assetTypes[left.type]?.name || left.type, assetTypes[right.type]?.name || right.type],
-        quantity: [Number(left.quantity) || 0, Number(right.quantity) || 0],
-        price: [left.valuationMode === "units" ? Number(left.unitPrice) || 0 : Number(left.value) || 0, right.valuationMode === "units" ? Number(right.unitPrice) || 0 : Number(right.value) || 0],
         value: [assetValue(left), assetValue(right)],
-        costBasis: [costBasisValue(left), costBasisValue(right)],
-        gain: [assetValue(left) - costBasisValue(left), assetValue(right) - costBasisValue(right)],
+        role: [portfolioRole(left), portfolioRole(right)],
       }[sort.key] || [left[sort.key] || "", right[sort.key] || ""];
       const comparison = typeof values[0] === "string" ? values[0].localeCompare(values[1]) : values[0] - values[1];
       return sort.asc ? comparison : -comparison;
@@ -58,32 +65,32 @@ export default function AssetTable({ assets, prevAssets, setAssets, assetTypes, 
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[1040px] text-sm">
-        <thead className="text-zinc-400"><tr>{heading("Name", "name")}{heading("Type", "type")}{heading("Quantity", "quantity", "right")}{heading("Price / total", "price", "right")}{heading("Current value", "value", "right")}{heading("Cost basis", "costBasis", "right")}{heading("Gain / loss", "gain", "right")}<th className="w-20 p-2 text-right">Edit</th></tr></thead>
+      <table className="w-full min-w-[680px] text-sm">
+        <thead className="text-zinc-400"><tr>{heading("Name", "name")}{heading("Type", "type")}{heading("Current value", "value", "right")}{heading("Portfolio role", "role")}<th className="w-20 p-2 text-right">Edit</th></tr></thead>
         <tbody>{sortedAssets.map((asset) => {
           const current = assetValue(asset);
           const hasPrevious = previousValues.has(asset.id);
           const previous = previousValues.get(asset.id) ?? 0;
           const delta = hasPrevious ? current - previous : null;
-          const basis = costBasisValue(asset);
-          const gain = current - basis;
-          const quoteCurrency = asset.pricingCurrency || currency;
+          const canQuickEdit = currentValueFactor(asset) > 0;
           return (
-            <tr key={asset.id} className={`border-t border-zinc-800 ${asset.status !== "active" ? "opacity-50" : ""}`} onDoubleClick={() => !readOnly && onEdit?.(asset)} title={readOnly ? "Historical snapshot" : "Double-click to edit"}>
-              <td className="p-2"><div>{asset.name}</div><div className="text-xs text-zinc-500">{asset.description || asset.status}</div>{asset.scopeNeedsReview && <div className="text-xs text-amber-400">⚠ Review portfolio scope</div>}</td>
+            <tr key={asset.id} className="border-t border-zinc-800" onDoubleClick={() => !readOnly && onEdit?.(asset)} title={readOnly ? "Historical snapshot" : "Double-click to edit"}>
+              <td className="p-2"><div>{asset.name}</div>{asset.description && <div className="text-xs text-zinc-500">{asset.description}</div>}{asset.scopeNeedsReview && <div className="text-xs text-amber-400">⚠ Review portfolio scope</div>}</td>
               <td className="p-2">{assetTypes[asset.type]?.name || asset.type}</td>
-              <td className="p-2 text-right">{asset.valuationMode === "units" ? <InlineNumber label={`${asset.name} quantity`} value={asset.quantity} formatted={(Number(asset.quantity) || 0).toLocaleString(undefined, { maximumFractionDigits: 6 })} kind="quantity" precision={6} onCommit={(value) => update(asset.id, "quantity", value)} readOnly={readOnly} /> : <span className="text-zinc-600">—</span>}</td>
-              <td className="p-2 text-right"><InlineNumber label={`${asset.name} ${asset.valuationMode === "units" ? "unit price" : "total value"}`} value={asset.valuationMode === "units" ? asset.unitPrice : asset.value} formatted={formatCurrency(asset.valuationMode === "units" ? asset.unitPrice : asset.value, quoteCurrency)} currency={quoteCurrency} onCommit={(value) => update(asset.id, asset.valuationMode === "units" ? "unitPrice" : "value", value)} readOnly={readOnly} /></td>
-              <td className="whitespace-nowrap p-2 text-right"><div>{formatCurrency(current, currency)}</div>{delta == null ? <div className="text-xs text-zinc-500" title="No matching asset in the previous snapshot">—</div> : delta !== 0 && <div className={`text-xs ${delta >= 0 ? "text-emerald-400" : "text-red-400"}`}>{delta >= 0 ? "+" : ""}{formatCurrency(delta, currency)}</div>}</td>
-              <td className="p-2 text-right"><InlineNumber label={`${asset.name} cost basis`} value={asset.costBasis} formatted={formatCurrency(asset.costBasis, quoteCurrency)} currency={quoteCurrency} onCommit={(value) => update(asset.id, "costBasis", value)} readOnly={readOnly} /></td>
-              <td className={`whitespace-nowrap p-2 text-right ${gain >= 0 ? "text-emerald-400" : "text-red-400"}`}>{basis > 0 ? formatCurrency(gain, currency) : "—"}</td>
+              <td className="whitespace-nowrap p-2 text-right" onDoubleClick={(event) => event.stopPropagation()} title={!readOnly && asset.valuationMode === "units" ? "Editing the current value recalculates the unit price." : undefined}>
+                {readOnly || !canQuickEdit
+                  ? <div>{formatCurrency(current, currency)}</div>
+                  : <NumberInput label={`${asset.name} current value`} kind="money" currency={currency} min={0} precision={2} value={current} onChange={(value) => updateCurrentValue(asset.id, value)} className="ml-auto w-36 [&>span:first-child]:sr-only" inputClassName="border-transparent bg-transparent px-1 py-1 text-right hover:border-zinc-700 focus:bg-zinc-800" />}
+                {delta == null ? <div className="text-xs text-zinc-500" title="No matching asset in the previous snapshot">—</div> : delta !== 0 && <div className={`text-xs ${delta >= 0 ? "text-emerald-400" : "text-red-400"}`}>{delta >= 0 ? "+" : ""}{formatCurrency(delta, currency)}</div>}
+              </td>
+              <td className="p-2 text-zinc-300">{portfolioRole(asset)}</td>
               <td className="p-2 text-right">{readOnly ? "—" : <button type="button" onClick={() => onEdit?.(asset)} className="rounded-lg border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs hover:bg-zinc-700">Edit</button>}</td>
             </tr>
           );
         })}</tbody>
       </table>
       {!assets?.length && <div className="py-6 text-center text-sm text-zinc-500">No assets in this snapshot.</div>}
-      <UndoToast message={undo?.message || ""} onUndo={() => { if (!undo) return; setAssets(assets.map((asset) => asset.id === undo.asset.id ? undo.asset : asset)); setUndo(null); }} onDismiss={() => setUndo(null)} />
+      <UndoToast message={undo?.message || ""} onUndo={() => { if (!undo) return; setAssets?.(assets.map((asset) => asset.id === undo.asset.id ? undo.asset : asset)); setUndo(null); }} onDismiss={() => setUndo(null)} />
     </div>
   );
 }

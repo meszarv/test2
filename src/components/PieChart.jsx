@@ -1,7 +1,29 @@
 import { useEffect, useRef, useState } from "react";
-import { pieColors } from "../utils.js";
+import { colorForCategory } from "../utils.js";
 
-export default function PieChart({ data, targetData, showTarget = false, assetTypes = {} }) {
+function getChartEntries(data, targetData, showTarget) {
+  const labels = Array.from(
+    new Set([
+      ...Object.keys(data || {}),
+      ...Object.keys(targetData || {}),
+    ])
+  );
+  const source = showTarget ? targetData : data;
+  const rawEntries = labels.map((label) => [label, Number(source?.[label]) || 0]);
+  const total = rawEntries.reduce((sum, [, value]) => sum + value, 0);
+  const entries = total > 0
+    ? rawEntries
+      .filter(([, value]) => value > 0)
+      .map(([label, value]) => ({
+        label,
+        value,
+        color: colorForCategory(label),
+      }))
+    : [];
+  return { entries, total };
+}
+
+export default function PieChart({ data, targetData, showTarget = false, assetTypes = {}, compact = false, ariaLabel = "" }) {
   const ref = useRef(null);
   const arcsRef = useRef([]);
   const metricsRef = useRef({ cx: 0, cy: 0, radius: 0 });
@@ -27,18 +49,9 @@ export default function PieChart({ data, targetData, showTarget = false, assetTy
       canvas.width = width;
       canvas.height = height;
       ctx.clearRect(0, 0, width, height);
-      const labels = Array.from(
-        new Set([
-          ...Object.keys(data || {}),
-          ...Object.keys(targetData || {}),
-        ])
-      );
-      const source = showTarget ? targetData : data;
-      const rawEntries = labels.map((l) => [l, source?.[l] || 0]);
-      const total = rawEntries.reduce((a, [, v]) => a + (Number(v) || 0), 0);
+      const { entries, total } = getChartEntries(data, targetData, showTarget);
       if (total <= 0) return;
       totalRef.current = total;
-      const entries = rawEntries.filter(([, v]) => (Number(v) || 0) > 0);
       let start = -Math.PI / 2;
       const radius = Math.min(width, height) / 2 - 8 * dpr;
       const cx = width / 2;
@@ -46,10 +59,8 @@ export default function PieChart({ data, targetData, showTarget = false, assetTy
       metricsRef.current = { cx, cy, radius };
       arcsRef.current = [];
       const percentFmt = percentFmtRef.current;
-      entries.forEach(([label, value], i) => {
-        const val = Number(value) || 0;
+      entries.forEach(({ label, value: val, color }) => {
         const angle = (val / total) * Math.PI * 2;
-        const color = pieColors[i % pieColors.length];
         ctx.beginPath();
         ctx.moveTo(cx, cy);
         ctx.fillStyle = color;
@@ -140,13 +151,35 @@ export default function PieChart({ data, targetData, showTarget = false, assetTy
   }, [data, targetData, showTarget]);
 
   const percentFmt = percentFmtRef.current;
+  const { entries, total } = getChartEntries(data, targetData, showTarget);
 
   return (
     <div className="relative">
       <canvas
         ref={ref}
-        className="w-full h-40 rounded border border-zinc-800 bg-zinc-900"
+        role="img"
+        aria-label={ariaLabel || `${showTarget ? "Target" : "Current"} allocation pie chart`}
+        className={`w-full rounded border border-zinc-800 bg-zinc-900 ${compact ? "h-32" : "h-40"}`}
       />
+      {entries.length > 0 && (
+        <ul aria-label="Chart legend" className={`grid gap-x-4 sm:grid-cols-2 ${compact ? "mt-2 gap-y-1 text-[11px]" : "mt-3 gap-y-1.5 text-xs"}`}>
+          {entries.map(({ label, value, color }) => (
+            <li key={label} className="flex min-w-0 items-center gap-2">
+              <span
+                aria-hidden="true"
+                className="h-2.5 w-2.5 shrink-0 rounded-sm"
+                style={{ backgroundColor: color }}
+              />
+              <span className="min-w-0 flex-1 truncate" title={assetTypes[label]?.name || label}>
+                {assetTypes[label]?.name || label}
+              </span>
+              <span className="shrink-0 tabular-nums text-zinc-400">
+                {percentFmt.format(value / total)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
       {hover && (
         <div
           className="absolute pointer-events-none bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs"

@@ -14,6 +14,7 @@ export default function Modal({
   primaryAction,
   secondaryLabel = "Cancel",
   size = "max-w-3xl",
+  contentClassName = "p-5",
   zIndex = "z-50",
 }) {
   const titleId = useId();
@@ -70,7 +71,7 @@ export default function Modal({
           <h2 id={titleId} className="text-lg font-medium text-zinc-100">{title}</h2>
           {description && <p className="mt-1 text-xs text-zinc-500">{description}</p>}
         </header>
-        <div className="min-h-0 flex-1 overflow-y-auto p-5">{children}</div>
+        <div className={`min-h-0 flex-1 overflow-y-auto ${contentClassName}`}>{children}</div>
         <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-zinc-800 bg-zinc-900 px-5 py-4">
           <div>{deleteAction}</div>
           <div className="flex items-center gap-2">

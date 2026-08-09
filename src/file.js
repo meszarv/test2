@@ -111,24 +111,44 @@ export async function decryptPortfolio(buf, password) {
 }
 
 export const DEFAULT_PORTFOLIO = {
-  version: 7,
+  version: 10,
   currency: "EUR",
   assetTypes: cloneDefaults(defaultAssetTypes),
   liabilityTypes: cloneDefaults(defaultLiabilityTypes),
   dimensions: cloneDefaults(defaultDimensions),
   strategy: cloneDefaults(defaultStrategy),
-  incomeRecords: [],
-  liabilities: [],
   snapshots: [],
 };
+
+function isRecord(value) {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function recordArray(value) {
+  return Array.isArray(value) ? value.filter(isRecord) : [];
+}
+
+export function convertLegacySnapshotToV1(data) {
+  if (!isRecord(data) || !data.asOf || !Array.isArray(data.assets)) return data;
+  const { asOf, assets, allocation, assetTypes, currency, ...rest } = data;
+  const inferredCurrency = currency || assets.find((asset) => isRecord(asset) && asset.currency)?.currency || DEFAULT_PORTFOLIO.currency;
+  return {
+    ...rest,
+    version: 1,
+    currency: inferredCurrency,
+    assetTypes: isRecord(assetTypes) ? assetTypes : {},
+    allocation: isRecord(allocation) ? allocation : {},
+    snapshots: [{ asOf, assets, liabilities: [] }],
+  };
+}
 
 function stableRecordIds(snapshots, kind) {
   const known = new Map();
   const canonicalById = new Map();
   let counter = 0;
-  return (snapshots || []).map((snapshot) => {
+  return recordArray(snapshots).map((snapshot) => {
     const occurrences = new Map();
-    const records = (snapshot[kind] || []).map((record) => {
+    const records = recordArray(snapshot[kind]).map((record) => {
       const fingerprint = `${record.type || ""}\u0000${record.name || ""}\u0000${record.description || ""}`;
       const occurrence = occurrences.get(fingerprint) || 0;
       occurrences.set(fingerprint, occurrence + 1);
@@ -147,25 +167,31 @@ function stableRecordIds(snapshots, kind) {
 }
 
 export function convertV5ToV6(data) {
+  const legacyAssetTypes = isRecord(data.assetTypes) ? data.assetTypes : defaultAssetTypes;
   const assetTypes = Object.fromEntries(
-    Object.entries(data.assetTypes || defaultAssetTypes).map(([key, definition]) => [
+    Object.entries(legacyAssetTypes).map(([key, definition]) => [
       key,
-      { ...definition, dimensionRules: definition.dimensionRules || {} },
+      {
+        ...(isRecord(definition) ? definition : {}),
+        name: definition?.name || definition?.label || key,
+        dimensionRules: definition?.dimensionRules || {},
+      },
     ])
   );
   let snapshots = stableRecordIds(data.snapshots || [], "assets");
   snapshots = stableRecordIds(snapshots, "liabilities").map((snapshot) => ({
     ...snapshot,
-    assets: (snapshot.assets || []).map((asset) => normalizeAsset(asset, assetTypes)),
+    assets: (snapshot.assets || []).map((asset) => ({
+      ...normalizeAsset(asset, assetTypes),
+      status: asset.status || "active",
+    })),
     liabilities: (snapshot.liabilities || []).map((liability) => ({
       ...liability,
       value: Number(liability.value) || 0,
-      priority: !!liability.priority,
     })),
-    contributions: Number(snapshot.contributions) || 0,
-    withdrawals: Number(snapshot.withdrawals) || 0,
   }));
-  const latestLiabilities = snapshots[snapshots.length - 1]?.liabilities || data.liabilities || [];
+  const snapshotLiabilities = snapshots[snapshots.length - 1]?.liabilities || [];
+  const latestLiabilities = snapshotLiabilities.length ? snapshotLiabilities : recordArray(data.liabilities);
   const { allocation: legacyAllocation, ...rest } = data;
   return {
     ...rest,
@@ -175,8 +201,7 @@ export function convertV5ToV6(data) {
     liabilityTypes: data.liabilityTypes || cloneDefaults(defaultLiabilityTypes),
     dimensions: mergeDimensions(data.dimensions),
     strategy: mergeStrategy(data.strategy, legacyAllocation),
-    incomeRecords: data.incomeRecords || [],
-    liabilities: latestLiabilities.map((liability) => ({ ...liability, priority: !!liability.priority })),
+    liabilities: latestLiabilities,
     snapshots,
   };
 }
@@ -186,9 +211,10 @@ function assetTypesWithScopeRules(assetTypes = {}) {
     Object.entries(assetTypes).map(([key, definition]) => [
       key,
       {
-        ...definition,
-        scopeRule: definition.scopeRule || cloneDefaults(defaultAssetTypes[key]?.scopeRule || { mode: "user", value: "" }),
-        dimensionRules: definition.dimensionRules || {},
+        ...(isRecord(definition) ? definition : {}),
+        name: definition?.name || definition?.label || key,
+        scopeRule: definition?.scopeRule || cloneDefaults(defaultAssetTypes[key]?.scopeRule || { mode: "user", value: "" }),
+        dimensionRules: definition?.dimensionRules || {},
       },
     ])
   );
@@ -213,15 +239,17 @@ export function convertV6ToV7(data) {
   let snapshots = stableRecordIds(data.snapshots || [], "assets");
   snapshots = stableRecordIds(snapshots, "liabilities").map((snapshot) => ({
     ...snapshot,
-    assets: (snapshot.assets || []).map((asset) => normalizeStoredAsset({
-      ...asset,
-      ...inferLegacyPortfolioScope(asset),
-    }, assetTypes)),
-    liabilities: (snapshot.liabilities || []).map((liability) => ({ ...liability, priority: !!liability.priority })),
-    contributions: Number(snapshot.contributions) || 0,
-    withdrawals: Number(snapshot.withdrawals) || 0,
+    assets: (snapshot.assets || []).map((asset) => ({
+      ...normalizeStoredAsset({
+        ...asset,
+        ...inferLegacyPortfolioScope(asset),
+      }, assetTypes),
+      status: asset.status || "active",
+    })),
+    liabilities: (snapshot.liabilities || []).map((liability) => ({ ...liability })),
   }));
-  const latestLiabilities = snapshots[snapshots.length - 1]?.liabilities || data.liabilities || [];
+  const snapshotLiabilities = snapshots[snapshots.length - 1]?.liabilities || [];
+  const latestLiabilities = snapshotLiabilities.length ? snapshotLiabilities : recordArray(data.liabilities);
   return {
     ...data,
     version: 7,
@@ -230,15 +258,146 @@ export function convertV6ToV7(data) {
     liabilityTypes: data.liabilityTypes || cloneDefaults(defaultLiabilityTypes),
     dimensions: mergeDimensions(data.dimensions),
     strategy: mergeStrategy(data.strategy),
-    incomeRecords: data.incomeRecords || [],
-    liabilities: latestLiabilities.map((liability) => ({ ...liability, priority: !!liability.priority })),
+    liabilities: latestLiabilities,
     snapshots,
   };
 }
 
+function normalizeLiability(liability = {}, liabilityTypes = defaultLiabilityTypes) {
+  const type = liability.type || Object.keys(liabilityTypes)[0] || "loan";
+  return {
+    id: liability.id || "",
+    name: liability.name || liabilityTypes[type]?.name || type,
+    type,
+    description: liability.description || "",
+    value: Number(liability.value) || 0,
+  };
+}
+
+function normalizePortfolio(data, version) {
+  const assetTypes = assetTypesWithScopeRules(data.assetTypes || cloneDefaults(defaultAssetTypes));
+  const liabilityTypes = Object.fromEntries(
+    Object.entries(isRecord(data.liabilityTypes) ? data.liabilityTypes : cloneDefaults(defaultLiabilityTypes)).map(([key, definition]) => [
+      key,
+      { ...(isRecord(definition) ? definition : {}), name: definition?.name || definition?.label || key },
+    ])
+  );
+  let snapshots = stableRecordIds(data.snapshots || [], "assets");
+  snapshots = stableRecordIds(snapshots, "liabilities").map((snapshot) => {
+    let investmentCashAssigned = false;
+    return {
+      asOf: snapshot.asOf,
+      assets: (snapshot.assets || []).map((asset) => {
+        const normalized = normalizeStoredAsset({
+          ...asset,
+          portfolioScope: validPortfolioScope(asset.portfolioScope) ? asset.portfolioScope : "total",
+          scopeNeedsReview: !!asset.scopeNeedsReview,
+        }, assetTypes);
+        if (version < 10) {
+          delete normalized.reserveToKeep;
+          delete normalized.isInvestmentCashAccount;
+        } else if (normalized.isInvestmentCashAccount) {
+          if (investmentCashAssigned) normalized.isInvestmentCashAccount = false;
+          else investmentCashAssigned = true;
+        }
+        return normalized;
+      }),
+      liabilities: (snapshot.liabilities || []).map((liability) => normalizeLiability(liability, liabilityTypes)),
+    };
+  });
+  return {
+    version,
+    currency: data.currency || "EUR",
+    assetTypes,
+    liabilityTypes,
+    dimensions: isRecord(data.dimensions) ? data.dimensions : cloneDefaults(defaultDimensions),
+    strategy: mergeStrategy(isRecord(data.strategy) ? data.strategy : {}),
+    snapshots,
+  };
+}
+
+function normalizeV8Portfolio(data) {
+  return normalizePortfolio(data, 8);
+}
+
+function normalizeV9Portfolio(data) {
+  return normalizePortfolio(data, 9);
+}
+
+function normalizeV10Portfolio(data) {
+  return normalizePortfolio(data, 10);
+}
+
+export function convertV7ToV8(data) {
+  let snapshots = stableRecordIds(data.snapshots || [], "assets");
+  snapshots = stableRecordIds(snapshots, "liabilities").map((snapshot) => ({
+    asOf: snapshot.asOf,
+    assets: (snapshot.assets || []).filter((asset) => asset.status !== "closed" && asset.status !== "sold"),
+    liabilities: snapshot.liabilities || [],
+  }));
+
+  const legacyLiabilities = recordArray(data.liabilities);
+  if (legacyLiabilities.length && !snapshots.some((snapshot) => snapshot.liabilities.length)) {
+    if (snapshots.length) {
+      snapshots[snapshots.length - 1] = { ...snapshots[snapshots.length - 1], liabilities: legacyLiabilities };
+    } else {
+      snapshots.push({ asOf: new Date().toISOString(), assets: [], liabilities: legacyLiabilities });
+    }
+  }
+
+  return normalizeV8Portfolio({ ...data, version: 8, snapshots });
+}
+
+export function convertV8ToV9(data) {
+  const snapshots = recordArray(data.snapshots).map((snapshot) => ({
+    ...snapshot,
+    assets: recordArray(snapshot.assets).map((asset) => {
+      const cleaned = { ...asset };
+      delete cleaned.valuationDate;
+      return cleaned;
+    }),
+  }));
+  return normalizeV9Portfolio({ ...data, version: 9, snapshots });
+}
+
+export function convertV9ToV10(data) {
+  const snapshots = recordArray(data.snapshots).map((snapshot) => {
+    const assets = recordArray(snapshot.assets);
+    const markedDestinations = assets.filter((asset) => asset.isInvestmentCashAccount && asset.type === "cash" && asset.portfolioScope === "financial");
+    const financialCash = assets.filter((asset) => asset.type === "cash" && asset.portfolioScope === "financial" && !asset.isCheckingAccount);
+    const destination = markedDestinations.length === 1
+      ? markedDestinations[0]
+      : markedDestinations.length === 0 && financialCash.length === 1
+      ? financialCash[0]
+      : null;
+    return {
+      ...snapshot,
+      assets: assets.map((asset) => ({
+        ...asset,
+        reserveToKeep: "",
+        isInvestmentCashAccount: asset === destination,
+      })),
+    };
+  });
+  return normalizeV10Portfolio({ ...data, version: 10, snapshots });
+}
+
 export function upgradePortfolio(data) {
-  if (!data || typeof data !== "object") return DEFAULT_PORTFOLIO;
-  let out = { ...data };
+  if (!isRecord(data)) throw new Error("Invalid portfolio contents.");
+  let out = convertLegacySnapshotToV1(data);
+  if (out.version == null && (Array.isArray(out.snapshots) || isRecord(out.assetTypes) || isRecord(out.allocation))) {
+    out = { ...out, version: 1 };
+  } else {
+    out = { ...out };
+  }
+  const parsedVersion = Number(out.version);
+  if (!Number.isInteger(parsedVersion) || parsedVersion < 1) {
+    throw new Error("Unsupported portfolio file: missing or invalid version.");
+  }
+  if (parsedVersion > DEFAULT_PORTFOLIO.version) {
+    throw new Error(`This portfolio uses newer file version ${parsedVersion}. Update the application to open it.`);
+  }
+  out.version = parsedVersion;
   if (out.version === 1) {
     out = { currency: "USD", ...out, version: 2 };
   }
@@ -246,7 +405,7 @@ export function upgradePortfolio(data) {
     out = {
       ...out,
       liabilityTypes: defaultLiabilityTypes,
-      snapshots: (out.snapshots || []).map((s) => ({ ...s, liabilities: s.liabilities || [] })),
+      snapshots: recordArray(out.snapshots).map((s) => ({ ...s, liabilities: recordArray(s.liabilities) })),
       version: 3,
     };
   }
@@ -254,15 +413,7 @@ export function upgradePortfolio(data) {
     out = { ...out, liabilities: out.liabilities || [], version: 4 };
   }
   if (out.version === 4) {
-    out = {
-      ...out,
-      liabilities: (out.liabilities || []).map((l) => ({ priority: false, ...l })),
-      snapshots: (out.snapshots || []).map((s) => ({
-        ...s,
-        liabilities: (s.liabilities || []).map((l) => ({ priority: false, ...l })),
-      })),
-      version: 5,
-    };
+    out = { ...out, version: 5 };
   }
   if (out.version === 5) {
     out = convertV5ToV6(out);
@@ -271,31 +422,16 @@ export function upgradePortfolio(data) {
     out = convertV6ToV7(out);
   }
   if (out.version === 7) {
-    const assetTypes = assetTypesWithScopeRules(out.assetTypes || cloneDefaults(defaultAssetTypes));
-    let snapshots = stableRecordIds(out.snapshots || [], "assets");
-    snapshots = stableRecordIds(snapshots, "liabilities").map((snapshot) => ({
-      ...snapshot,
-      assets: (snapshot.assets || []).map((asset) => normalizeStoredAsset({
-        ...asset,
-        portfolioScope: validPortfolioScope(asset.portfolioScope) ? asset.portfolioScope : "total",
-        scopeNeedsReview: !!asset.scopeNeedsReview,
-      }, assetTypes)),
-      liabilities: (snapshot.liabilities || []).map((liability) => ({ ...liability, priority: !!liability.priority })),
-      contributions: Number(snapshot.contributions) || 0,
-      withdrawals: Number(snapshot.withdrawals) || 0,
-    }));
-    out = {
-      ...out,
-      version: 7,
-      currency: out.currency || "EUR",
-      assetTypes,
-      liabilityTypes: out.liabilityTypes || cloneDefaults(defaultLiabilityTypes),
-      dimensions: out.dimensions || cloneDefaults(defaultDimensions),
-      strategy: mergeStrategy(out.strategy),
-      incomeRecords: out.incomeRecords || [],
-      liabilities: out.liabilities || [],
-      snapshots,
-    };
+    out = convertV7ToV8(out);
+  }
+  if (out.version === 8) {
+    out = convertV8ToV9(out);
+  }
+  if (out.version === 9) {
+    out = convertV9ToV10(out);
+  }
+  if (out.version === 10) {
+    out = normalizeV10Portfolio(out);
   }
   return out;
 }

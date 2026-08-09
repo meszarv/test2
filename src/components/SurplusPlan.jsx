@@ -31,40 +31,101 @@ export default function SurplusPlan({ recommendation, assets, strategy, assetTyp
 
   return (
     <div className="space-y-4">
-      <div className="grid sm:grid-cols-3 gap-3">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-xl border border-zinc-800 p-3">
           <div className="text-xs text-zinc-500">Checking-account cash</div>
           <div className="text-lg font-medium">{formatCurrency(recommendation.checkingCash, currency)}</div>
         </div>
         <div className="rounded-xl border border-zinc-800 p-3">
-          <div className="text-xs text-zinc-500">Cash reserve</div>
-          <div className="text-lg font-medium">{formatCurrency(recommendation.reserveTarget, currency)}</div>
+          <div className="text-xs text-zinc-500">Required cash reserve</div>
+          <div className="text-lg font-medium">{formatCurrency(recommendation.effectiveReserveTarget, currency)}</div>
         </div>
-        <div className={`rounded-xl border p-3 ${recommendation.surplus > 0 ? "border-blue-700 bg-blue-950/20" : "border-zinc-800"}`}>
+        <div className={`rounded-xl border p-3 ${recommendation.reserveShortfall > 0.01 ? "border-amber-800 bg-amber-950/20" : "border-zinc-800"}`}>
+          <div className="text-xs text-zinc-500">Reserve shortfall</div>
+          <div className={`text-lg font-medium ${recommendation.reserveShortfall > 0.01 ? "text-amber-300" : ""}`}>{formatCurrency(recommendation.reserveShortfall, currency)}</div>
+        </div>
+        <div className={`rounded-xl border p-3 ${recommendation.surplus > 0.01 ? "border-blue-700 bg-blue-950/20" : "border-zinc-800"}`}>
           <div className="text-xs text-zinc-500">Available to invest</div>
           <div className="text-lg font-medium">{formatCurrency(recommendation.surplus, currency)}</div>
         </div>
       </div>
 
+      {(recommendation.warnings || []).map((warning) => (
+        <div key={warning} className="rounded-lg border border-amber-800 bg-amber-950/20 p-3 text-sm text-amber-300">{warning}</div>
+      ))}
       <p className="text-sm text-zinc-400">{recommendation.reason}</p>
-      <div className="grid sm:grid-cols-2 gap-3 text-sm">
-        <div className="rounded-xl border border-zinc-800 p-3">
-          <div className="text-xs text-zinc-500">Financial Portfolio after plan</div>
-          <div>{formatCurrency(recommendation.currentMetrics.financialPortfolio, currency)} → <span className="text-blue-300">{formatCurrency(recommendation.projectedMetrics.financialPortfolio, currency)}</span></div>
+
+      {recommendation.accountReserves.length > 0 && (
+        <div>
+          <h3 className="mb-2 text-sm font-medium">Checking-account reserves</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-zinc-400">
+                <tr>
+                  <th className="py-2 text-left">Account</th>
+                  <th className="py-2 text-left">Assignment</th>
+                  <th className="py-2 text-right">Current</th>
+                  <th className="py-2 text-right">Reserve to keep</th>
+                  <th className="py-2 text-right">After transfers</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recommendation.accountReserves.map((account) => (
+                  <tr key={account.assetId} className="border-t border-zinc-800">
+                    <td className="py-2">{account.name}</td>
+                    <td className="py-2 text-zinc-400">{account.assignment}</td>
+                    <td className="py-2 text-right">{formatCurrency(account.current, currency)}</td>
+                    <td className="py-2 text-right">{formatCurrency(account.reserve, currency)}</td>
+                    <td className={`py-2 text-right ${account.projected + 0.01 < account.reserve ? "text-amber-300" : ""}`}>{formatCurrency(account.projected, currency)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-        <div className="rounded-xl border border-zinc-800 p-3">
-          <div className="text-xs text-zinc-500">Investable Assets after transfer</div>
-          <div>{formatCurrency(recommendation.currentMetrics.investableAssets, currency)} → {formatCurrency(recommendation.projectedMetrics.investableAssets, currency)}</div>
+      )}
+
+      {recommendation.transfers.length > 0 && (
+        <div>
+          <h3 className="mb-2 text-sm font-medium">Cash transfers — do these first</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-zinc-400">
+                <tr>
+                  <th className="py-2 text-left">From</th>
+                  <th className="py-2 text-left">To</th>
+                  <th className="py-2 text-left">Purpose</th>
+                  <th className="py-2 text-right">Transfer</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recommendation.transfers.map((transfer, index) => (
+                  <tr key={`${transfer.fromAssetId}:${transfer.toAssetId}:${transfer.kind}:${index}`} className="border-t border-zinc-800">
+                    <td className="py-2">{transfer.fromName}</td>
+                    <td className="py-2">{transfer.toName}</td>
+                    <td className="py-2 text-zinc-400">{transfer.kind === "replenish" ? "Replenish reserve" : "Fund investment cash"}</td>
+                    <td className="py-2 text-right font-medium text-blue-300">{formatCurrency(transfer.amount, currency)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
+      )}
+
+      <div className="rounded-xl border border-zinc-800 p-3 text-sm">
+        <div className="text-xs text-zinc-500">Financial Portfolio after plan</div>
+        <div>{formatCurrency(recommendation.currentMetrics.financialPortfolio, currency)} → <span className="text-blue-300">{formatCurrency(recommendation.projectedMetrics.financialPortfolio, currency)}</span></div>
       </div>
       {recommendation.unallocated > 0.01 && (
         <div className="rounded-lg border border-amber-800 bg-amber-950/20 p-3 text-sm text-amber-300">
-          {formatCurrency(recommendation.unallocated, currency)} remains in checking accounts because every further allocation would break a configured maximum.
+          {formatCurrency(recommendation.unallocated, currency)} remains in the investment cash account because it cannot currently be allocated by the configured strategy.
         </div>
       )}
 
       {recommendation.plan.length > 0 && (
         <>
+          <h3 className="text-sm font-medium">Next investment</h3>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="text-zinc-400">
@@ -119,7 +180,7 @@ export default function SurplusPlan({ recommendation, assets, strategy, assetTyp
               </div>
             </div>
           )}
-          <p className="text-xs text-zinc-500">Advisory only. Record the actual purchase in the portfolio after executing it with your provider.</p>
+          <p className="text-xs text-zinc-500">Advisory only. After executing the transfers and purchases, record the resulting balances and holdings in the next portfolio update.</p>
         </>
       )}
     </div>

@@ -13,8 +13,6 @@ export default function useSnapshots({ assets, setAssets, liabilities, setLiabil
         asOf: iso,
         assets: (nextAssets || []).map((a) => ({ ...a, dimensions: JSON.parse(JSON.stringify(a.dimensions || {})) })),
         liabilities: (nextLiabilities || []).map((l) => ({ ...l })),
-        contributions: 0,
-        withdrawals: 0,
       };
       const existing = prev.findIndex((p) => p.asOf.slice(0, 7) === month);
       let s;
@@ -58,7 +56,6 @@ export default function useSnapshots({ assets, setAssets, liabilities, setLiabil
       (snap.liabilities || []).map((l) => ({
         ...l,
         name: l.name || labelFor(l.type, liabilityTypes),
-        priority: !!l.priority,
       }))
     );
   }
@@ -80,16 +77,6 @@ export default function useSnapshots({ assets, setAssets, liabilities, setLiabil
       setCurrentIndex(next.findIndex((s) => s.asOf === iso));
       return next;
     });
-  }
-
-  function handleChangeSnapshotCashFlow(i, contributions, withdrawals) {
-    setSnapshots((prev) => prev.map((snapshot, index) => index === i
-      ? {
-          ...snapshot,
-          contributions: contributions === "" ? 0 : Number(contributions),
-          withdrawals: withdrawals === "" ? 0 : Number(withdrawals),
-        }
-      : snapshot));
   }
 
   function handleDeleteSnapshot(i) {
@@ -132,7 +119,6 @@ export default function useSnapshots({ assets, setAssets, liabilities, setLiabil
     handleSelectSnapshot,
     handleAddSnapshot,
     handleChangeSnapshotDate,
-    handleChangeSnapshotCashFlow,
     handleDeleteSnapshot,
     handleRestoreSnapshot,
   };

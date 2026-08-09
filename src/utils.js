@@ -3,16 +3,26 @@ export function mkId() {
   return `id-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 }
 
-export const pieColors = [
-  "#8ab4f8",
-  "#f28b82",
-  "#fbbc04",
-  "#34a853",
-  "#ff6d01",
-  "#a142f4",
-  "#00acc1",
-  "#ffab40",
-];
+const standardCategoryColors = {
+  cash: "#34a853",
+  real_estate: "#f28b82",
+  stock: "#8ab4f8",
+  private_equity: "#a142f4",
+  bond: "#fbbc04",
+  commodity: "#ff6d01",
+};
+
+export function colorForCategory(key) {
+  const normalizedKey = String(key || "");
+  if (standardCategoryColors[normalizedKey]) return standardCategoryColors[normalizedKey];
+
+  let hash = 2166136261;
+  for (let index = 0; index < normalizedKey.length; index++) {
+    hash ^= normalizedKey.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `hsl(${(hash >>> 0) % 360} 68% 58%)`;
+}
 
 export function labelFor(key, registry = {}) {
   return registry[key]?.name || key;
@@ -27,20 +37,17 @@ export function mkAsset(type, registry, name = "") {
     description: "",
     ownership: "personal",
     ownershipShare: 100,
-    acquiredOn: "",
-    status: "active",
     pricingCurrency: "EUR",
     valuationMode: "total",
     isCheckingAccount: type === "cash",
+    reserveToKeep: "",
+    isInvestmentCashAccount: false,
     eligibleForInvestment: type !== "cash",
     dimensions: {},
     quantity: 0,
     unitPrice: 0,
     fxRate: 1,
     value: 0,
-    costBasis: 0,
-    valuationDate: "",
-    notes: "",
   };
 }
 

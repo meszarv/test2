@@ -1,15 +1,12 @@
 import { useState } from "react";
-import { mkAsset } from "../utils.js";
+import { mkId } from "../utils.js";
 
 export default function useLiabilityManager({ assets, liabilities, liabilityTypes, setAssetsAndUpdateSnapshot, setEditLiability }) {
   const [liabilityToDelete, setLiabilityToDelete] = useState(null);
   const [deletedLiability, setDeletedLiability] = useState(null);
 
-  function addLiability({ name, type, description, value, priority = false }) {
-    const liability = mkAsset(type, liabilityTypes, name);
-    liability.description = description;
-    liability.value = value;
-    liability.priority = !!priority;
+  function addLiability({ name, type, description, value }) {
+    const liability = { id: mkId(), name, type, description, value };
     setAssetsAndUpdateSnapshot(assets, [...liabilities, liability]);
   }
 

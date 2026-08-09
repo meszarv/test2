@@ -36,8 +36,6 @@ export default function usePortfolioFile({
   setDimensions,
   strategy,
   setStrategy,
-  incomeRecords,
-  setIncomeRecords,
   snapshots,
   setSnapshots,
   snapshotFromAssets,
@@ -78,7 +76,7 @@ export default function usePortfolioFile({
       return;
     }
     setDirty(true);
-  }, [assetTypes, liabilityTypes, currency, dimensions, strategy, incomeRecords, snapshots]);
+  }, [assetTypes, liabilityTypes, currency, dimensions, strategy, snapshots]);
 
   useEffect(() => {
     function beforeUnload(event) {
@@ -121,17 +119,19 @@ export default function usePortfolioFile({
     setError(null);
     try {
       const examples = [
-        ["cash", "Main checking account", 25000],
-        ["stock", "Global equity ETF", 60000],
-        ["bond", "Government bond ETF", 20000],
-        ["real_estate", "Rental property", 100000],
-        ["commodity", "Gold ETC", 10000],
+        { type: "cash", name: "Main checking account", value: 25000, reserveToKeep: 6000 },
+        { type: "cash", name: "Household checking account", value: 5000, reserveToKeep: "" },
+        { type: "cash", name: "Investment cash", value: 1000, portfolioScope: "financial", isInvestmentCashAccount: true },
+        { type: "stock", name: "Global equity ETF", value: 60000 },
+        { type: "bond", name: "Government bond ETF", value: 20000 },
+        { type: "real_estate", name: "Rental property", value: 100000 },
+        { type: "commodity", name: "Gold ETC", value: 10000 },
       ];
-      const sampleAssets = examples.map(([t, name, value]) => {
-        const a = mkAsset(t, defaultAssetTypes, name);
+      const sampleAssets = examples.map(({ type, name, value, ...overrides }) => {
+        const a = mkAsset(type, defaultAssetTypes, name);
         a.value = value;
-        a.costBasis = t === "cash" ? value : Math.round(value * 0.8);
-        a.eligibleForInvestment = t !== "cash" && t !== "real_estate";
+        a.eligibleForInvestment = type !== "cash" && type !== "real_estate";
+        Object.assign(a, overrides);
         return normalizeAsset(a, defaultAssetTypes);
       });
       const sampleSnapshots = [];
@@ -164,7 +164,6 @@ export default function usePortfolioFile({
           },
         },
       }));
-      setIncomeRecords([]);
       setSnapshots(sampleSnapshots);
       setAssets(sampleSnapshots[sampleSnapshots.length - 1].assets);
       setLiabilities([]);
@@ -218,7 +217,6 @@ export default function usePortfolioFile({
             ...l,
             id: l.id || mkId(),
             name: l.name || labelFor(l.type, lt),
-            priority: !!l.priority,
           }))
         );
         setCurrentIndex(snaps.length - 1);
@@ -228,7 +226,6 @@ export default function usePortfolioFile({
       setCurrency(data.currency || "EUR");
       setDimensions(data.dimensions || cloneDefaults(defaultDimensions));
       setStrategy(data.strategy || cloneDefaults(defaultStrategy));
-      setIncomeRecords(data.incomeRecords || []);
       setAssetTypes(at);
       setLiabilityTypes(lt);
       setStep("main");
@@ -257,9 +254,7 @@ export default function usePortfolioFile({
       liabilityTypes,
       dimensions,
       strategy,
-      incomeRecords,
       snapshots,
-      liabilities,
     };
   }
 
@@ -318,7 +313,6 @@ export default function usePortfolioFile({
       setCurrency(DEFAULT_PORTFOLIO.currency);
       setDimensions(cloneDefaults(defaultDimensions));
       setStrategy(cloneDefaults(defaultStrategy));
-      setIncomeRecords([]);
       setAssetTypes(defaultAssetTypes);
       setLiabilityTypes(defaultLiabilityTypes);
       setStep("pick");

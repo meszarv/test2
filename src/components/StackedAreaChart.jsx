@@ -1,5 +1,5 @@
 import { useEffect, useRef, useMemo } from "react";
-import { pieColors, formatCurrency, labelFor } from "../utils.js";
+import { colorForCategory, formatCurrency, labelFor } from "../utils.js";
 
 export default function StackedAreaChart({ data, assetTypes, currency = "EUR" }) {
   const canvasRef = useRef(null);
@@ -94,7 +94,7 @@ export default function StackedAreaChart({ data, assetTypes, currency = "EUR" })
       }
 
       const accum = new Array(xs.length).fill(0);
-      categories.forEach((cat, ci) => {
+      categories.forEach((cat) => {
         const vals = data.map((d) => Math.max(0, Number(d[cat]) || 0));
         const base = accum.slice();
         ctx.beginPath();
@@ -106,7 +106,7 @@ export default function StackedAreaChart({ data, assetTypes, currency = "EUR" })
           ctx.lineTo(xToPx(xs[i]), yToPx(base[i]));
         }
         ctx.closePath();
-        ctx.fillStyle = pieColors[ci % pieColors.length];
+        ctx.fillStyle = colorForCategory(cat);
         ctx.globalAlpha = 0.8;
         ctx.fill();
         ctx.globalAlpha = 1;
@@ -142,11 +142,11 @@ export default function StackedAreaChart({ data, assetTypes, currency = "EUR" })
         className="w-full h-64 rounded border border-zinc-800 bg-zinc-900"
       />
       <div className="mt-2 flex flex-wrap gap-2 text-xs">
-        {categories.map((c, i) => (
+        {categories.map((c) => (
           <div key={c} className="flex items-center gap-1">
             <span
               className="inline-block h-3 w-3 rounded"
-              style={{ backgroundColor: pieColors[i % pieColors.length] }}
+              style={{ backgroundColor: colorForCategory(c) }}
             />
             <span>{labelFor(c, assetTypes)}</span>
           </div>
