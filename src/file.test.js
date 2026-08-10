@@ -7,8 +7,10 @@ import {
   convertV7ToV8,
   convertV8ToV9,
   convertV9ToV10,
+  createPortfolioBackup,
   DEFAULT_PORTFOLIO,
   encryptPortfolio,
+  readPortfolioBackup,
   readPortfolioFile,
   upgradePortfolio,
   writePortfolioFile,
@@ -156,6 +158,56 @@ test('writePortfolioFile/readPortfolioFile round-trips current snapshots', async
   assert.equal(read.version, 10);
   assert.equal(read.snapshots[0].assets[0].value, 500);
   assert.deepEqual(read.snapshots[0].liabilities, data.snapshots[0].liabilities);
+});
+
+function backupFile(contents, name) {
+  const bytes = typeof contents === 'string' ? new TextEncoder().encode(contents) : new Uint8Array(contents);
+  return {
+    name,
+    async arrayBuffer() {
+      return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+    },
+  };
+}
+
+test('plain JSON backups preserve current portfolio data and upgrade on import', async () => {
+  const legacy = {
+    version: 9,
+    currency: 'EUR',
+    assetTypes: { cash: { name: 'Cash', scopeRule: { mode: 'default', value: 'investable' }, dimensionRules: {} } },
+    liabilityTypes: {},
+    dimensions: {},
+    strategy: {},
+    snapshots: [{ asOf: '2026-02-01T00:00:00.000Z', assets: [{ id: 'cash-1', name: 'Cash', type: 'cash', portfolioScope: 'investable', value: 700 }], liabilities: [] }],
+  };
+  const backup = await createPortfolioBackup(legacy, 'json');
+  const imported = await readPortfolioBackup(backupFile(backup.contents, 'portfolio.json'));
+
+  assert.equal(backup.extension, 'json');
+  assert.equal(imported.version, 10);
+  assert.equal(imported.snapshots[0].assets[0].value, 700);
+});
+
+test('encrypted backups require their password and round-trip current portfolio data', async () => {
+  const data = {
+    ...DEFAULT_PORTFOLIO,
+    snapshots: [{ asOf: '2026-03-01T00:00:00.000Z', assets: [], liabilities: [{ id: 'loan-1', name: 'Loan', type: 'loan', value: 250 }] }],
+  };
+  const backup = await createPortfolioBackup(data, 'encrypted', 'backup-password');
+  const file = backupFile(backup.contents, 'portfolio.enc');
+  const imported = await readPortfolioBackup(file, 'backup-password');
+
+  assert.equal(backup.extension, 'enc');
+  assert.equal(imported.snapshots[0].liabilities[0].value, 250);
+  await assert.rejects(() => readPortfolioBackup(file), /Enter the password/);
+  await assert.rejects(() => readPortfolioBackup(file, 'wrong-password'), /Could not decrypt/);
+});
+
+test('backup import rejects invalid unencrypted data', async () => {
+  await assert.rejects(
+    () => readPortfolioBackup(backupFile('not json', 'broken.json')),
+    /not a valid portfolio JSON backup/
+  );
 });
 
 test('upgradePortfolio converts v5 allocation and reconciles legacy asset IDs', () => {

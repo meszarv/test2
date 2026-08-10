@@ -89,7 +89,7 @@ function PortfolioViewSettings({ assets, liabilities, currency, onReviewScopes }
   );
 }
 
-function DataSettings({ driveConfigured, driveAvailable, onEditJson }) {
+function DataSettings({ driveConfigured, driveAvailable, onEditJson, onExportBackup, onImportBackup }) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const driveLabel = driveAvailable ? "Available" : driveConfigured ? "Unavailable" : "Not configured";
   const driveDescription = driveAvailable
@@ -101,8 +101,16 @@ function DataSettings({ driveConfigured, driveAvailable, onEditJson }) {
     <div className="space-y-6">
       <SettingsSectionHeader title="Data & Integrations" description="File storage, integrations, and advanced portfolio controls." />
       <div className="grid md:grid-cols-2 gap-3">
-        <SettingsSummaryCard label="Portfolio file" value="Encrypted local file" description="Saving, encryption, import, and export behavior are unchanged." />
+        <SettingsSummaryCard label="Portfolio data" value="Backup available" description="Export the current in-memory state independently of the backing file." />
         <SettingsSummaryCard label="Google Drive" value={driveLabel} description={driveDescription} tone={driveAvailable ? "default" : "warning"} />
+      </div>
+      <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
+        <h3 className="font-medium">Backup and restore</h3>
+        <p className="mt-1 text-sm text-zinc-500">Download an encrypted or readable JSON backup, including changes that have not been saved to the active file.</p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button type="button" onClick={onExportBackup} className="rounded-lg bg-blue-600 px-3 py-2 text-sm hover:bg-blue-500">Export backup</button>
+          <button type="button" onClick={onImportBackup} className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm hover:bg-zinc-700">Import backup</button>
+        </div>
       </div>
       <CollapsiblePanel
         title="Advanced"
@@ -136,6 +144,8 @@ export default function ConfigPage({
   driveConfigured = false,
   driveAvailable = false,
   onEditJson,
+  onExportBackup,
+  onImportBackup,
   onDone,
   onReviewScopes,
   referencedCurrencies = [],
@@ -188,7 +198,7 @@ export default function ConfigPage({
     if (activeSection === "asset_types") return <AssetTypeManager assetTypes={assetTypes} setAssetTypes={setAssetTypes} assets={assets} dimensions={dimensions} />;
     if (activeSection === "dimensions") return <DimensionManager dimensions={dimensions} setDimensions={setDimensions} assetTypes={assetTypes} assets={assets} strategy={strategy} />;
     if (activeSection === "liability_types") return <LiabilityTypeManager liabilityTypes={liabilityTypes} setLiabilityTypes={setLiabilityTypes} liabilities={liabilities} />;
-    return <DataSettings driveConfigured={driveConfigured} driveAvailable={driveAvailable} onEditJson={onEditJson} />;
+    return <DataSettings driveConfigured={driveConfigured} driveAvailable={driveAvailable} onEditJson={onEditJson} onExportBackup={onExportBackup} onImportBackup={onImportBackup} />;
   }
 
   return (

@@ -3391,15 +3391,23 @@ function PortfolioViewSettings({ assets, liabilities, currency, onReviewScopes }
     /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-zinc-500", children: "Scope semantics are fixed. Change an individual asset’s scope from its edit dialog, or configure defaults and locks under Asset Types." })
   ] });
 }
-function DataSettings({ driveConfigured, driveAvailable, onEditJson }) {
+function DataSettings({ driveConfigured, driveAvailable, onEditJson, onExportBackup, onImportBackup }) {
   const [advancedOpen, setAdvancedOpen] = reactExports.useState(false);
   const driveLabel = driveAvailable ? "Available" : driveConfigured ? "Unavailable" : "Not configured";
   const driveDescription = driveAvailable ? "Google Drive operations are ready." : driveConfigured ? "Google Drive initialization failed, so Drive operations are disabled." : "This build does not contain the required Google API credentials.";
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-6", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx(SettingsSectionHeader, { title: "Data & Integrations", description: "File storage, integrations, and advanced portfolio controls." }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid md:grid-cols-2 gap-3", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(SettingsSummaryCard, { label: "Portfolio file", value: "Encrypted local file", description: "Saving, encryption, import, and export behavior are unchanged." }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(SettingsSummaryCard, { label: "Portfolio data", value: "Backup available", description: "Export the current in-memory state independently of the backing file." }),
       /* @__PURE__ */ jsxRuntimeExports.jsx(SettingsSummaryCard, { label: "Google Drive", value: driveLabel, description: driveDescription, tone: driveAvailable ? "default" : "warning" })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "rounded-xl border border-zinc-800 bg-zinc-900/50 p-4", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { className: "font-medium", children: "Backup and restore" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-1 text-sm text-zinc-500", children: "Download an encrypted or readable JSON backup, including changes that have not been saved to the active file." }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mt-4 flex flex-wrap gap-2", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", onClick: onExportBackup, className: "rounded-lg bg-blue-600 px-3 py-2 text-sm hover:bg-blue-500", children: "Export backup" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", onClick: onImportBackup, className: "rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm hover:bg-zinc-700", children: "Import backup" })
+      ] })
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsx(
       CollapsiblePanel,
@@ -3433,6 +3441,8 @@ function ConfigPage({
   driveConfigured = false,
   driveAvailable = false,
   onEditJson,
+  onExportBackup,
+  onImportBackup,
   onDone,
   onReviewScopes,
   referencedCurrencies = [],
@@ -3481,7 +3491,7 @@ function ConfigPage({
     if (activeSection === "asset_types") return /* @__PURE__ */ jsxRuntimeExports.jsx(AssetTypeManager, { assetTypes, setAssetTypes, assets, dimensions });
     if (activeSection === "dimensions") return /* @__PURE__ */ jsxRuntimeExports.jsx(DimensionManager, { dimensions, setDimensions, assetTypes, assets, strategy });
     if (activeSection === "liability_types") return /* @__PURE__ */ jsxRuntimeExports.jsx(LiabilityTypeManager, { liabilityTypes, setLiabilityTypes, liabilities });
-    return /* @__PURE__ */ jsxRuntimeExports.jsx(DataSettings, { driveConfigured, driveAvailable, onEditJson });
+    return /* @__PURE__ */ jsxRuntimeExports.jsx(DataSettings, { driveConfigured, driveAvailable, onEditJson, onExportBackup, onImportBackup });
   }
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "fixed inset-0 z-30 flex max-w-full flex-col overflow-hidden bg-zinc-950 text-zinc-100", role: "dialog", "aria-modal": "true", "aria-label": "Settings", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx("header", { className: "shrink-0 border-b border-zinc-800 bg-zinc-950/95 px-4 py-3 md:px-6", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mx-auto flex max-w-7xl items-center justify-between gap-4", children: [
@@ -3895,6 +3905,112 @@ function PortfolioScopeFilter({ values, onToggle, title, description }) {
       );
     }) })
   ] });
+}
+function PortfolioBackupModal({
+  open,
+  initialMode = "export",
+  allowExport = true,
+  defaultPassword = "",
+  loading = false,
+  error = "",
+  hasUnsavedChanges = false,
+  onClose,
+  onExport,
+  onImport
+}) {
+  const [mode, setMode] = reactExports.useState(initialMode);
+  const [format, setFormat] = reactExports.useState("encrypted");
+  const [password, setPassword] = reactExports.useState("");
+  const [confirmation, setConfirmation] = reactExports.useState("");
+  const [file, setFile] = reactExports.useState(null);
+  const [validationError, setValidationError] = reactExports.useState("");
+  reactExports.useEffect(() => {
+    if (!open) return;
+    const nextMode = allowExport ? initialMode : "import";
+    setMode(nextMode);
+    setFormat("encrypted");
+    setPassword(nextMode === "export" ? defaultPassword : "");
+    setConfirmation(nextMode === "export" ? defaultPassword : "");
+    setFile(null);
+    setValidationError("");
+  }, [open, initialMode, allowExport, defaultPassword]);
+  function changeMode(nextMode) {
+    setMode(nextMode);
+    setPassword(nextMode === "export" ? defaultPassword : "");
+    setConfirmation(nextMode === "export" ? defaultPassword : "");
+    setFile(null);
+    setValidationError("");
+  }
+  async function submit(event) {
+    event.preventDefault();
+    setValidationError("");
+    if (mode === "export") {
+      if (format === "encrypted" && !password) return setValidationError("Enter a password for the encrypted backup.");
+      if (format === "encrypted" && password !== confirmation) return setValidationError("The backup passwords do not match.");
+      const success2 = await onExport?.(format, format === "encrypted" ? password : "");
+      if (success2 !== false) onClose?.();
+      return;
+    }
+    if (!file) return setValidationError("Select an encrypted or JSON portfolio backup.");
+    if (file.name?.toLowerCase().endsWith(".enc") && !password) return setValidationError("Enter the password for this encrypted backup.");
+    const success = await onImport?.(file, password);
+    if (success !== false) onClose?.();
+  }
+  const encryptedExport = mode === "export" && format === "encrypted";
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    Modal,
+    {
+      open,
+      title: "Portfolio backup",
+      description: "Export the current in-memory portfolio or restore a previous backup.",
+      onClose,
+      onSubmit: submit,
+      size: "max-w-xl",
+      primaryAction: /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "submit", disabled: loading, className: "rounded-lg bg-blue-600 px-4 py-2 text-sm hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40", children: loading ? "Working…" : mode === "export" ? "Export backup" : "Import backup" }),
+      children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-5", children: [
+        allowExport && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid grid-cols-2 gap-2 rounded-lg bg-zinc-950 p-1", role: "tablist", "aria-label": "Backup operation", children: [
+          ["export", "Export"],
+          ["import", "Import"]
+        ].map(([key, label]) => /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", role: "tab", "aria-selected": mode === key, onClick: () => changeMode(key), className: `rounded-md px-3 py-2 text-sm ${mode === key ? "bg-blue-600 text-white" : "text-zinc-400 hover:bg-zinc-800"}`, children: label }, key)) }),
+        mode === "export" ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("fieldset", { children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("legend", { className: "text-sm text-zinc-400", children: "Backup format" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mt-2 grid gap-2 md:grid-cols-2", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: `cursor-pointer rounded-lg border p-3 ${format === "encrypted" ? "border-blue-500 bg-blue-950/30" : "border-zinc-800 bg-zinc-950/40"}`, children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "radio", name: "backup-format", value: "encrypted", checked: format === "encrypted", onChange: () => setFormat("encrypted"), className: "mr-2" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-medium", children: "Encrypted (.enc)" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "mt-1 block text-xs text-zinc-500", children: "Protected by a backup password." })
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: `cursor-pointer rounded-lg border p-3 ${format === "json" ? "border-blue-500 bg-blue-950/30" : "border-zinc-800 bg-zinc-950/40"}`, children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "radio", name: "backup-format", value: "json", checked: format === "json", onChange: () => setFormat("json"), className: "mr-2" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-medium", children: "Readable JSON (.json)" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "mt-1 block text-xs text-zinc-500", children: "Portable and editable, but not encrypted." })
+              ] })
+            ] })
+          ] }),
+          encryptedExport ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid gap-3 md:grid-cols-2", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(TextInput, { label: "Backup password", type: "password", value: password, onChange: setPassword, required: true }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(TextInput, { label: "Confirm password", type: "password", value: confirmation, onChange: setConfirmation, required: true })
+          ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "rounded-lg border border-amber-900/70 bg-amber-950/20 p-3 text-sm text-amber-200", children: "JSON backups contain all portfolio data in readable text. Store them somewhere private." })
+        ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+          hasUnsavedChanges && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "rounded-lg border border-amber-900/70 bg-amber-950/20 p-3 text-sm text-amber-200", children: "The active portfolio has unsaved changes. Export them first if you may need to return to them." }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "block text-sm", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-zinc-400", children: [
+              "Portfolio backup ",
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-amber-400", children: "*" })
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "file", accept: ".enc,.json,application/octet-stream,application/json", onChange: (event) => {
+              setFile(event.target.files?.[0] || null);
+              setValidationError("");
+            }, className: "mt-1 block w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-zinc-800 file:px-3 file:py-1 file:text-zinc-200 hover:file:bg-zinc-700" })
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(TextInput, { label: "Password (encrypted backups only)", type: "password", value: password, onChange: setPassword }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-zinc-500", children: "The format is detected from the file contents. Import replaces the portfolio in memory; the current local or Drive file is not overwritten until you explicitly Save." })
+        ] }),
+        (validationError || error) && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "rounded-lg border border-red-800 bg-red-950/30 p-3 text-sm text-red-200", children: validationError || error })
+      ] })
+    }
+  );
 }
 function PortfolioTotals({ metrics, requiredCashReserve, currency }) {
   const totals = [
@@ -4472,6 +4588,47 @@ async function encryptPortfolio(data, password) {
 }
 async function decryptPortfolio(buf, password) {
   return await decryptJson(buf, password);
+}
+async function createPortfolioBackup(data, format, password = "") {
+  if (format === "encrypted") {
+    if (!password) throw new Error("Enter a password for the encrypted backup.");
+    return {
+      contents: await encryptJson(data, password),
+      mimeType: "application/octet-stream",
+      extension: "enc"
+    };
+  }
+  if (format === "json") {
+    return {
+      contents: JSON.stringify(data, null, 2),
+      mimeType: "application/json",
+      extension: "json"
+    };
+  }
+  throw new Error("Unsupported backup format.");
+}
+async function readPortfolioBackup(file, password = "") {
+  if (!file?.arrayBuffer) throw new Error("Select a portfolio backup file.");
+  const buffer = await file.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  const encrypted = equalBytes(bytes.slice(0, MAGIC.length), MAGIC);
+  let data;
+  if (encrypted) {
+    if (!password) throw new Error("Enter the password for this encrypted backup.");
+    try {
+      data = await decryptJson(buffer, password);
+    } catch {
+      throw new Error("Could not decrypt the backup. Check the password and selected file.");
+    }
+  } else {
+    try {
+      const text = new TextDecoder().decode(bytes).replace(/^\uFEFF/, "");
+      data = JSON.parse(text);
+    } catch {
+      throw new Error("The selected file is not a valid portfolio JSON backup.");
+    }
+  }
+  return upgradePortfolio(data);
 }
 const DEFAULT_PORTFOLIO = {
   version: 10,
@@ -5188,6 +5345,37 @@ function usePortfolioFile({
       setLoading(false);
     }
   }
+  function applyPortfolioData(data, { markDirty = false } = {}) {
+    const snaps = (data.snapshots || []).slice().sort((a, b) => new Date(a.asOf) - new Date(b.asOf));
+    const at = data.assetTypes || defaultAssetTypes;
+    const lt = data.liabilityTypes || defaultLiabilityTypes;
+    setSnapshots(snaps);
+    const latest = snaps[snaps.length - 1];
+    if (latest) {
+      setAssets((latest.assets || []).map((a) => normalizeStoredAsset({ ...a, id: a.id || mkId(), name: a.name || labelFor(a.type, at) }, at)));
+      setLiabilities(
+        (latest.liabilities || []).map((l) => ({
+          ...l,
+          id: l.id || mkId(),
+          name: l.name || labelFor(l.type, lt)
+        }))
+      );
+      setCurrentIndex(snaps.length - 1);
+    } else {
+      setAssets([]);
+      setLiabilities([]);
+      snapshotFromAssets([], []);
+    }
+    setCurrency(data.currency || "EUR");
+    setDimensions(data.dimensions || cloneDefaults(defaultDimensions));
+    setStrategy(data.strategy || cloneDefaults(defaultStrategy));
+    setAssetTypes(at);
+    setLiabilityTypes(lt);
+    setStep("main");
+    setDirty(markDirty);
+    setLastSavedAt(null);
+    skipDirty.current = true;
+  }
   async function handleLoad() {
     if (!fileHandle && driveFileId === null) return setError("Select a file first.");
     if (!password) return setError("Enter a password first.");
@@ -5214,33 +5402,7 @@ function usePortfolioFile({
           await writePortfolioFile(fileHandle, password, data);
         }
       }
-      const snaps = (data.snapshots || []).slice().sort((a, b) => new Date(a.asOf) - new Date(b.asOf));
-      setSnapshots(snaps);
-      const latest = snaps[snaps.length - 1];
-      const at = data.assetTypes || defaultAssetTypes;
-      const lt = data.liabilityTypes || defaultLiabilityTypes;
-      if (latest) {
-        setAssets((latest.assets || []).map((a) => normalizeStoredAsset({ ...a, id: a.id || mkId(), name: a.name || labelFor(a.type, at) }, at)));
-        setLiabilities(
-          (latest.liabilities || []).map((l) => ({
-            ...l,
-            id: l.id || mkId(),
-            name: l.name || labelFor(l.type, lt)
-          }))
-        );
-        setCurrentIndex(snaps.length - 1);
-      } else {
-        snapshotFromAssets(assets, liabilities);
-      }
-      setCurrency(data.currency || "EUR");
-      setDimensions(data.dimensions || cloneDefaults(defaultDimensions));
-      setStrategy(data.strategy || cloneDefaults(defaultStrategy));
-      setAssetTypes(at);
-      setLiabilityTypes(lt);
-      setStep("main");
-      setDirty(false);
-      setLastSavedAt(null);
-      skipDirty.current = true;
+      applyPortfolioData(data);
     } catch (e) {
       if (e && (e.name === "NotAllowedError" || e.name === "NotFoundError")) {
         await clearSavedFile();
@@ -5265,13 +5427,14 @@ function usePortfolioFile({
       snapshots
     };
   }
-  async function withLoading(fn) {
+  async function withLoading(fn, failureHint = "") {
     setLoading(true);
     setError(null);
     try {
       return await fn();
     } catch (e) {
-      setError(e && e.message ? e.message : String(e));
+      const message = e && e.message ? e.message : String(e);
+      setError(failureHint ? `${message} ${failureHint}` : message);
       return false;
     } finally {
       setLoading(false);
@@ -5290,7 +5453,28 @@ function usePortfolioFile({
       }
       setDirty(false);
       setLastSavedAt(/* @__PURE__ */ new Date());
-      skipDirty.current = true;
+    }, "Your changes are still in memory. Export a backup before closing or reloading the page.");
+  }
+  async function handleExportBackup(format, backupPassword) {
+    return withLoading(async () => {
+      const backup = await createPortfolioBackup(buildPortfolioData(), format, backupPassword);
+      const blob = new Blob([backup.contents], { type: backup.mimeType });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `portfolio-backup-${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}.${backup.extension}`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+      return true;
+    });
+  }
+  async function handleImportBackup(file, backupPassword) {
+    return withLoading(async () => {
+      const data = await readPortfolioBackup(file, backupPassword);
+      applyPortfolioData(data, { markDirty: true });
+      return true;
     });
   }
   async function handleCloseFile({ save = false } = {}) {
@@ -5321,7 +5505,7 @@ function usePortfolioFile({
       setAssetTypes(defaultAssetTypes);
       setLiabilityTypes(defaultLiabilityTypes);
       setStep("pick");
-    });
+    }, save ? "Your changes are still in memory. Export a backup before closing or reloading the page." : "");
   }
   return {
     password,
@@ -5336,14 +5520,14 @@ function usePortfolioFile({
     dirty,
     lastSavedAt,
     canSave: Boolean(fileHandle || driveFileId),
-    setDirty,
-    skipDirty,
     handleOpenExisting,
     handleCreateNew,
     handleOpenDrive,
     handleOpenSample,
     handleLoad,
     handleSave,
+    handleExportBackup,
+    handleImportBackup,
     handleCloseFile
   };
 }
@@ -5457,7 +5641,7 @@ function useSnapshots({ assets, setAssets, liabilities, setLiabilities, assetTyp
     handleRestoreSnapshot
   };
 }
-const version = "1.0.83";
+const version = "1.0.85";
 const pkg = {
   version
 };
@@ -5488,12 +5672,13 @@ function App() {
   const [showTarget, setShowTarget] = reactExports.useState(false);
   const [jsonOpen, setJsonOpen] = reactExports.useState(false);
   const [closePortfolioOpen, setClosePortfolioOpen] = reactExports.useState(false);
+  const [backupModalMode, setBackupModalMode] = reactExports.useState(null);
   const driveApiKey = "AIzaSyD9IhFBHBHEs729edMO7LsoKZFlTfsnv5U";
   const driveClientId = "967365398072-sj6mjo1r3pdg18frmdl5aoafnvbbsfob.apps.googleusercontent.com";
   const driveConfigured = Boolean(driveClientId);
   const [driveAvailable, setDriveAvailable] = reactExports.useState(driveConfigured);
   const builtAgo = reactExports.useMemo(() => {
-    const timestamp = "2026-08-10T21:36:21.256Z";
+    const timestamp = "2026-08-10T23:42:41.210Z";
     const difference = Date.now() - new Date(timestamp).getTime();
     const formatter = new Intl.RelativeTimeFormat(void 0, { numeric: "auto" });
     const seconds = Math.floor(difference / 1e3);
@@ -5536,6 +5721,8 @@ function App() {
     handleOpenSample,
     handleLoad,
     handleSave,
+    handleExportBackup,
+    handleImportBackup,
     handleCloseFile
   } = usePortfolioFile({
     assets,
@@ -5663,6 +5850,10 @@ function App() {
   function requestClosePortfolio() {
     if (dirty) setClosePortfolioOpen(true);
     else handleCloseFile({ save: false });
+  }
+  function openBackupModal(mode) {
+    setError(null);
+    setBackupModalMode(mode);
   }
   async function saveAndClosePortfolio() {
     const result = await handleCloseFile({ save: true });
@@ -5838,6 +6029,7 @@ function App() {
       /* @__PURE__ */ jsxRuntimeExports.jsx("button", { disabled: loading, onClick: handleOpenExisting, className: "h-12 px-6 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50", children: "Open existing file" }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("button", { disabled: loading, onClick: handleCreateNew, className: "h-12 px-6 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50", children: "Create new file" }),
       driveAvailable && /* @__PURE__ */ jsxRuntimeExports.jsx("button", { disabled: loading, onClick: handleOpenDrive, className: "h-12 px-6 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50", children: "Open from Google Drive" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { disabled: loading, onClick: () => openBackupModal("import"), className: "h-10 px-4 rounded-lg border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50", children: "Import backup" }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("button", { disabled: loading, onClick: handleOpenSample, className: "text-sm text-blue-400 underline disabled:opacity-50", children: "Open sample portfolio" }),
       builtAgo && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-sm text-zinc-400", children: [
         "Built ",
@@ -5862,12 +6054,12 @@ function App() {
     ] }),
     step === "main" && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "max-w-7xl mx-auto p-4 md:p-6 space-y-6", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "flex items-center justify-between gap-4", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "flex flex-col items-start justify-between gap-4 md:flex-row md:items-center", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx("h1", { className: "text-2xl font-semibold", children: "Portfolio Strategy Tracker" }),
             /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-zinc-400", children: "Private by default · Monthly check-ins · Explainable allocation guidance" })
           ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex w-full flex-wrap items-center justify-end gap-3 md:w-auto", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-right text-xs", children: [
               /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: dirty ? "text-amber-400" : "text-zinc-400", children: dirty ? "● Unsaved changes" : canSave ? "Saved" : "Sample portfolio · not saved to a file" }),
               !dirty && lastSavedAt && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-zinc-600", children: [
@@ -5876,6 +6068,7 @@ function App() {
               ] })
             ] }),
             /* @__PURE__ */ jsxRuntimeExports.jsx("button", { onClick: handleSave, disabled: loading || !canSave || !dirty, className: `h-10 rounded-lg border px-4 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 ${dirty && canSave ? "border-blue-500 bg-blue-600 hover:bg-blue-500" : "border-zinc-700 bg-zinc-800 hover:bg-zinc-700"}`, children: loading ? "Saving…" : "Save" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("button", { onClick: () => openBackupModal("export"), disabled: loading, className: "h-10 rounded-lg border border-zinc-700 bg-zinc-800 px-4 text-sm hover:bg-zinc-700 disabled:opacity-50", children: "Backup" }),
             /* @__PURE__ */ jsxRuntimeExports.jsx("button", { onClick: () => setConfigOpen(true), className: "h-10 rounded-lg border border-zinc-700 bg-zinc-800 px-4 text-sm hover:bg-zinc-700", children: "Settings" }),
             /* @__PURE__ */ jsxRuntimeExports.jsx("button", { onClick: requestClosePortfolio, disabled: loading, className: "h-10 rounded-lg border border-zinc-700 bg-zinc-800 px-4 text-sm hover:bg-zinc-700 disabled:opacity-50", children: "Close portfolio" })
           ] })
@@ -5934,6 +6127,24 @@ function App() {
       /* @__PURE__ */ jsxRuntimeExports.jsx(UndoToast, { message: deletedAsset ? `Asset “${deletedAsset.asset.name}” deleted.` : "", onUndo: undoDeleteAsset, onDismiss: clearDeletedAsset }),
       /* @__PURE__ */ jsxRuntimeExports.jsx(UndoToast, { message: deletedLiability ? `Liability “${deletedLiability.liability.name}” deleted.` : "", onUndo: undoDeleteLiability, onDismiss: clearDeletedLiability })
     ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      PortfolioBackupModal,
+      {
+        open: !!backupModalMode,
+        initialMode: backupModalMode || "export",
+        allowExport: step === "main",
+        defaultPassword: password,
+        loading,
+        error: error || "",
+        hasUnsavedChanges: dirty,
+        onClose: () => {
+          setBackupModalMode(null);
+          setError(null);
+        },
+        onExport: handleExportBackup,
+        onImport: handleImportBackup
+      }
+    ),
     configOpen && /* @__PURE__ */ jsxRuntimeExports.jsx(
       ConfigPage,
       {
@@ -5954,6 +6165,8 @@ function App() {
         driveAvailable,
         onDone: () => setConfigOpen(false),
         onEditJson: () => setJsonOpen(true),
+        onExportBackup: () => openBackupModal("export"),
+        onImportBackup: () => openBackupModal("import"),
         onReviewScopes: () => {
           setConfigOpen(false);
           setMainSection("update");
@@ -5961,7 +6174,7 @@ function App() {
           if (snapshots.length) handleSelectSnapshot(snapshots.length - 1);
         },
         referencedCurrencies,
-        nestedDialogOpen: jsonOpen
+        nestedDialogOpen: jsonOpen || !!backupModalMode
       }
     )
   ] });

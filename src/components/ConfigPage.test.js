@@ -31,6 +31,8 @@ function props(overrides = {}) {
     assets: [],
     liabilities: [],
     onEditJson: () => {},
+    onExportBackup: () => {},
+    onImportBackup: () => {},
     onDone: () => {},
     onReviewScopes: () => {},
     ...overrides,
@@ -73,6 +75,8 @@ test('ConfigPage reports strategy validation and Drive availability', async () =
   await act(async () => dataButton.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })));
   assert.match(document.querySelector('main').textContent, /Unavailable/);
   assert.match(document.querySelector('main').textContent, /Drive operations are disabled/);
+  assert.match(document.querySelector('main').textContent, /Export backup/);
+  assert.match(document.querySelector('main').textContent, /Import backup/);
   root.unmount();
   dom.window.close();
 });

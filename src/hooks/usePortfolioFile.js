@@ -6,6 +6,8 @@ import {
   readPortfolioFile,
   writePortfolioFile,
   clearSavedFile,
+  createPortfolioBackup,
+  readPortfolioBackup,
   DEFAULT_PORTFOLIO,
 } from "../file.js";
 import { openDriveFile, readDrivePortfolioFile, writeDrivePortfolioFile } from "../drive.js";
@@ -179,6 +181,38 @@ export default function usePortfolioFile({
     }
   }
 
+  function applyPortfolioData(data, { markDirty = false } = {}) {
+    const snaps = (data.snapshots || []).slice().sort((a, b) => new Date(a.asOf) - new Date(b.asOf));
+    const at = data.assetTypes || defaultAssetTypes;
+    const lt = data.liabilityTypes || defaultLiabilityTypes;
+    setSnapshots(snaps);
+    const latest = snaps[snaps.length - 1];
+    if (latest) {
+      setAssets((latest.assets || []).map((a) => normalizeStoredAsset({ ...a, id: a.id || mkId(), name: a.name || labelFor(a.type, at) }, at)));
+      setLiabilities(
+        (latest.liabilities || []).map((l) => ({
+          ...l,
+          id: l.id || mkId(),
+          name: l.name || labelFor(l.type, lt),
+        }))
+      );
+      setCurrentIndex(snaps.length - 1);
+    } else {
+      setAssets([]);
+      setLiabilities([]);
+      snapshotFromAssets([], []);
+    }
+    setCurrency(data.currency || "EUR");
+    setDimensions(data.dimensions || cloneDefaults(defaultDimensions));
+    setStrategy(data.strategy || cloneDefaults(defaultStrategy));
+    setAssetTypes(at);
+    setLiabilityTypes(lt);
+    setStep("main");
+    setDirty(markDirty);
+    setLastSavedAt(null);
+    skipDirty.current = true;
+  }
+
   async function handleLoad() {
     if (!fileHandle && driveFileId === null) return setError("Select a file first.");
     if (!password) return setError("Enter a password first.");
@@ -205,33 +239,7 @@ export default function usePortfolioFile({
           await writePortfolioFile(fileHandle, password, data);
         }
       }
-      const snaps = (data.snapshots || []).slice().sort((a, b) => new Date(a.asOf) - new Date(b.asOf));
-      setSnapshots(snaps);
-      const latest = snaps[snaps.length - 1];
-      const at = data.assetTypes || defaultAssetTypes;
-      const lt = data.liabilityTypes || defaultLiabilityTypes;
-      if (latest) {
-        setAssets((latest.assets || []).map((a) => normalizeStoredAsset({ ...a, id: a.id || mkId(), name: a.name || labelFor(a.type, at) }, at)));
-        setLiabilities(
-          (latest.liabilities || []).map((l) => ({
-            ...l,
-            id: l.id || mkId(),
-            name: l.name || labelFor(l.type, lt),
-          }))
-        );
-        setCurrentIndex(snaps.length - 1);
-      } else {
-        snapshotFromAssets(assets, liabilities);
-      }
-      setCurrency(data.currency || "EUR");
-      setDimensions(data.dimensions || cloneDefaults(defaultDimensions));
-      setStrategy(data.strategy || cloneDefaults(defaultStrategy));
-      setAssetTypes(at);
-      setLiabilityTypes(lt);
-      setStep("main");
-      setDirty(false);
-      setLastSavedAt(null);
-      skipDirty.current = true;
+      applyPortfolioData(data);
     } catch (e) {
       if (e && (e.name === "NotAllowedError" || e.name === "NotFoundError")) {
         await clearSavedFile();
@@ -258,13 +266,14 @@ export default function usePortfolioFile({
     };
   }
 
-  async function withLoading(fn) {
+  async function withLoading(fn, failureHint = "") {
     setLoading(true);
     setError(null);
     try {
       return await fn();
     } catch (e) {
-      setError(e && e.message ? e.message : String(e));
+      const message = e && e.message ? e.message : String(e);
+      setError(failureHint ? `${message} ${failureHint}` : message);
       return false;
     } finally {
       setLoading(false);
@@ -284,7 +293,30 @@ export default function usePortfolioFile({
       }
       setDirty(false);
       setLastSavedAt(new Date());
-      skipDirty.current = true;
+    }, "Your changes are still in memory. Export a backup before closing or reloading the page.");
+  }
+
+  async function handleExportBackup(format, backupPassword) {
+    return withLoading(async () => {
+      const backup = await createPortfolioBackup(buildPortfolioData(), format, backupPassword);
+      const blob = new Blob([backup.contents], { type: backup.mimeType });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `portfolio-backup-${new Date().toISOString().slice(0, 10)}.${backup.extension}`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+      return true;
+    });
+  }
+
+  async function handleImportBackup(file, backupPassword) {
+    return withLoading(async () => {
+      const data = await readPortfolioBackup(file, backupPassword);
+      applyPortfolioData(data, { markDirty: true });
+      return true;
     });
   }
 
@@ -316,7 +348,7 @@ export default function usePortfolioFile({
       setAssetTypes(defaultAssetTypes);
       setLiabilityTypes(defaultLiabilityTypes);
       setStep("pick");
-    });
+    }, save ? "Your changes are still in memory. Export a backup before closing or reloading the page." : "");
   }
 
   return {
@@ -332,14 +364,14 @@ export default function usePortfolioFile({
     dirty,
     lastSavedAt,
     canSave: Boolean(fileHandle || driveFileId),
-    setDirty,
-    skipDirty,
     handleOpenExisting,
     handleCreateNew,
     handleOpenDrive,
     handleOpenSample,
     handleLoad,
     handleSave,
+    handleExportBackup,
+    handleImportBackup,
     handleCloseFile,
   };
 }

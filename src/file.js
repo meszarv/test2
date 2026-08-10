@@ -110,6 +110,49 @@ export async function decryptPortfolio(buf, password) {
   return await decryptJson(buf, password);
 }
 
+export async function createPortfolioBackup(data, format, password = "") {
+  if (format === "encrypted") {
+    if (!password) throw new Error("Enter a password for the encrypted backup.");
+    return {
+      contents: await encryptJson(data, password),
+      mimeType: "application/octet-stream",
+      extension: "enc",
+    };
+  }
+  if (format === "json") {
+    return {
+      contents: JSON.stringify(data, null, 2),
+      mimeType: "application/json",
+      extension: "json",
+    };
+  }
+  throw new Error("Unsupported backup format.");
+}
+
+export async function readPortfolioBackup(file, password = "") {
+  if (!file?.arrayBuffer) throw new Error("Select a portfolio backup file.");
+  const buffer = await file.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  const encrypted = equalBytes(bytes.slice(0, MAGIC.length), MAGIC);
+  let data;
+  if (encrypted) {
+    if (!password) throw new Error("Enter the password for this encrypted backup.");
+    try {
+      data = await decryptJson(buffer, password);
+    } catch {
+      throw new Error("Could not decrypt the backup. Check the password and selected file.");
+    }
+  } else {
+    try {
+      const text = new TextDecoder().decode(bytes).replace(/^\uFEFF/, "");
+      data = JSON.parse(text);
+    } catch {
+      throw new Error("The selected file is not a valid portfolio JSON backup.");
+    }
+  }
+  return upgradePortfolio(data);
+}
+
 export const DEFAULT_PORTFOLIO = {
   version: 10,
   currency: "EUR",

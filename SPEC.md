@@ -1,4 +1,4 @@
-# Portfolio Strategy Tracker — Specification v0.10
+# Portfolio Strategy Tracker — Specification v0.11
 
 ## 1. Purpose
 
@@ -85,6 +85,17 @@ During upgrade, a version 7 file is first converted to version 8 by:
 Conversion must be covered by unit tests. Older versions continue through their existing conversions before the v7-to-v8, v8-to-v9, and v9-to-v10 conversions are applied.
 
 Encrypted standalone snapshot files from the earliest releases, which contain `asOf`, `assets`, `allocation`, and optional `assetTypes` without a portfolio wrapper or version, must also open. They are treated as a one-snapshot version 1 portfolio and then passed through the normal conversion chain. Legacy `label` fields on type definitions become current `name` fields.
+
+### Backup and recovery
+
+The complete current in-memory portfolio can be exported independently of its local or Google Drive backing file. This includes changes that have not yet been saved successfully.
+
+Two backup formats are supported:
+
+- Encrypted `.enc`, using the existing AES-GCM portfolio encryption and a user-supplied backup password.
+- Readable `.json`, preserving the full portfolio file structure without encryption and displaying an explicit privacy warning.
+
+Backup exports use a browser download, so a failed or inaccessible backing-file handle does not prevent recovery. Backup import is available both from the opening screen and from Settings. Import detects the format from file contents, decrypts when necessary, validates and upgrades all supported legacy portfolio structures, replaces the portfolio in memory, and marks it unsaved. Import never overwrites the active local or Drive file until the user explicitly chooses Save.
 
 ## 4. Asset observations
 
@@ -248,9 +259,11 @@ History is derived exclusively from state snapshots. It does not attempt to dist
 
 ## 11. Settings and integrations
 
-The existing full-screen Settings navigation remains available. Removing unused portfolio-tracking features must not reduce configuration for scopes, strategy rules, types, dimensions, storage, Drive, or advanced JSON access.
+The existing full-screen Settings navigation remains available. Removing unused portfolio-tracking features must not reduce configuration for scopes, strategy rules, types, dimensions, storage, Drive, backup and recovery, or advanced JSON access.
 
 Google Drive initialization must remain wrapped in error handling. Discovery failure displays an error and disables Drive operations.
+
+A successful save clears the unsaved indicator. The next portfolio edit must immediately mark the portfolio unsaved again and re-enable Save; load/import suppression must never consume a real post-save edit.
 
 ## 12. Scope boundaries
 
@@ -287,3 +300,5 @@ The implementation is complete when the user can:
 12. Save only fields used by overview, history, configuration, or guidance.
 13. Preserve Google Drive error handling and file encryption behavior.
 14. Pass the full automated test suite and credentialed production build.
+15. Export the complete current in-memory portfolio as encrypted or readable JSON, then import either format without overwriting a backing file until an explicit Save.
+16. Save, make another portfolio edit, and save again without the second edit being ignored by dirty-state tracking.

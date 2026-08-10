@@ -67,5 +67,20 @@ This plan refocuses the application on rule-based investment of surplus cash plu
 - [x] Verify removed fields and features have no remaining runtime references.
 - [x] Run the complete automated test suite.
 - [x] Bump the package version.
-- [ ] Run plain `npm run build` using the existing Google credential environment variables.
-- [ ] Review and commit the regenerated `docs` production site with all implementation changes.
+- [x] Run `npm run build` using the hardcoded Google browser credentials.
+- [x] Review and commit the regenerated `docs` production site with all implementation changes.
+
+## Milestone 7 — Backup and recovery
+
+- [x] Export the complete in-memory portfolio, including unsaved changes, through a backing-file-independent browser download.
+- [x] Support password-protected encrypted `.enc` and readable `.json` exports with clear privacy guidance.
+- [x] Import either format by file contents from the opening screen or Settings, including legacy file upgrades.
+- [x] Keep imported data in memory and mark it unsaved without overwriting the active local or Drive file until explicit Save.
+- [x] Explain after save failures that the in-memory state can still be exported before closing or reloading.
+- [x] Cover encrypted round trips, JSON upgrades, malformed imports, and transfer-dialog behavior with automated tests.
+
+## Milestone 8 — Repeated-save reliability
+
+- [x] Reproduce the save → edit → save regression with a hook-level test.
+- [x] Keep load/import dirty suppression while ensuring a successful save cannot suppress the next real edit.
+- [x] Rebuild the production site with the repeated-save fix.

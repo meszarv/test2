@@ -14,6 +14,7 @@ import LiabilityTable from "./components/LiabilityTable.jsx";
 import LineChart from "./components/LineChart.jsx";
 import PieChart from "./components/PieChart.jsx";
 import PortfolioScopeFilter from "./components/PortfolioScopeFilter.jsx";
+import PortfolioBackupModal from "./components/PortfolioBackupModal.jsx";
 import PortfolioTotals from "./components/PortfolioTotals.jsx";
 import PortfolioViewSelector from "./components/PortfolioViewSelector.jsx";
 import Section from "./components/Section.jsx";
@@ -77,6 +78,7 @@ export default function App() {
   const [showTarget, setShowTarget] = useState(false);
   const [jsonOpen, setJsonOpen] = useState(false);
   const [closePortfolioOpen, setClosePortfolioOpen] = useState(false);
+  const [backupModalMode, setBackupModalMode] = useState(null);
 
   const driveApiKey = __GOOGLE_API_KEY__;
   const driveClientId = __GOOGLE_CLIENT_ID__;
@@ -131,6 +133,8 @@ export default function App() {
     handleOpenSample,
     handleLoad,
     handleSave,
+    handleExportBackup,
+    handleImportBackup,
     handleCloseFile,
   } = usePortfolioFile({
     assets,
@@ -281,6 +285,11 @@ export default function App() {
   function requestClosePortfolio() {
     if (dirty) setClosePortfolioOpen(true);
     else handleCloseFile({ save: false });
+  }
+
+  function openBackupModal(mode) {
+    setError(null);
+    setBackupModalMode(mode);
   }
 
   async function saveAndClosePortfolio() {
@@ -468,6 +477,7 @@ export default function App() {
           <button disabled={loading} onClick={handleOpenExisting} className="h-12 px-6 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50">Open existing file</button>
           <button disabled={loading} onClick={handleCreateNew} className="h-12 px-6 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50">Create new file</button>
           {driveAvailable && <button disabled={loading} onClick={handleOpenDrive} className="h-12 px-6 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50">Open from Google Drive</button>}
+          <button disabled={loading} onClick={() => openBackupModal("import")} className="h-10 px-4 rounded-lg border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50">Import backup</button>
           <button disabled={loading} onClick={handleOpenSample} className="text-sm text-blue-400 underline disabled:opacity-50">Open sample portfolio</button>
           {builtAgo && <div className="text-sm text-zinc-400">Built {builtAgo}</div>}
         </div>
@@ -487,17 +497,18 @@ export default function App() {
       {step === "main" && (
         <>
           <div className="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
-            <header className="flex items-center justify-between gap-4">
+            <header className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
               <div>
                 <h1 className="text-2xl font-semibold">Portfolio Strategy Tracker</h1>
                 <p className="text-sm text-zinc-400">Private by default · Monthly check-ins · Explainable allocation guidance</p>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex w-full flex-wrap items-center justify-end gap-3 md:w-auto">
                 <div className="text-right text-xs">
                   <div className={dirty ? "text-amber-400" : "text-zinc-400"}>{dirty ? "● Unsaved changes" : canSave ? "Saved" : "Sample portfolio · not saved to a file"}</div>
                   {!dirty && lastSavedAt && <div className="text-zinc-600">Saved at {lastSavedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>}
                 </div>
                 <button onClick={handleSave} disabled={loading || !canSave || !dirty} className={`h-10 rounded-lg border px-4 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 ${dirty && canSave ? "border-blue-500 bg-blue-600 hover:bg-blue-500" : "border-zinc-700 bg-zinc-800 hover:bg-zinc-700"}`}>{loading ? "Saving…" : "Save"}</button>
+                <button onClick={() => openBackupModal("export")} disabled={loading} className="h-10 rounded-lg border border-zinc-700 bg-zinc-800 px-4 text-sm hover:bg-zinc-700 disabled:opacity-50">Backup</button>
                 <button onClick={() => setConfigOpen(true)} className="h-10 rounded-lg border border-zinc-700 bg-zinc-800 px-4 text-sm hover:bg-zinc-700">Settings</button>
                 <button onClick={requestClosePortfolio} disabled={loading} className="h-10 rounded-lg border border-zinc-700 bg-zinc-800 px-4 text-sm hover:bg-zinc-700 disabled:opacity-50">Close portfolio</button>
               </div>
@@ -557,6 +568,19 @@ export default function App() {
         </>
       )}
 
+      <PortfolioBackupModal
+        open={!!backupModalMode}
+        initialMode={backupModalMode || "export"}
+        allowExport={step === "main"}
+        defaultPassword={password}
+        loading={loading}
+        error={error || ""}
+        hasUnsavedChanges={dirty}
+        onClose={() => { setBackupModalMode(null); setError(null); }}
+        onExport={handleExportBackup}
+        onImport={handleImportBackup}
+      />
+
       {configOpen && (
         <ConfigPage
           assetTypes={assetTypes}
@@ -576,6 +600,8 @@ export default function App() {
           driveAvailable={driveAvailable}
           onDone={() => setConfigOpen(false)}
           onEditJson={() => setJsonOpen(true)}
+          onExportBackup={() => openBackupModal("export")}
+          onImportBackup={() => openBackupModal("import")}
           onReviewScopes={() => {
             setConfigOpen(false);
             setMainSection("update");
@@ -583,7 +609,7 @@ export default function App() {
             if (snapshots.length) handleSelectSnapshot(snapshots.length - 1);
           }}
           referencedCurrencies={referencedCurrencies}
-          nestedDialogOpen={jsonOpen}
+          nestedDialogOpen={jsonOpen || !!backupModalMode}
         />
       )}
     </div>
