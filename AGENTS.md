@@ -2,9 +2,9 @@
 - Commit the contents of the `docs` directory along with your changes.
 - Bump the version in `package.json` after each change.
 - When the portfolio file structure changes, bump the file version and add a conversion function with a corresponding unit test to upgrade older files.
-- Keep the real Google API key and client ID as defined in environment variables in the build output under `docs`.
-- Never explicitly set `VITE_GOOGLE_API_KEY` or `VITE_GOOGLE_CLIENT_ID` if they are already defined in the environment.
-- When building, rely on those existing environment variables; run `npm run build` without prefixing alternate values so the real credentials are embedded in `docs`.
+- Keep the real Google API key and client ID in the hardcoded constants at the top of `scripts/build.js` so they are embedded in the build output under `docs`.
+- Do not read Google credentials from environment variables or provide environment-variable fallbacks.
+- Run `npm run build` after updating the hardcoded credentials.
 - Wrap `gapi.client.init` in a try/catch; on discovery failure, display an error and disable Google Drive operations.
 
 Functionality Guidelines:

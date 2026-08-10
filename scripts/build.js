@@ -1,38 +1,49 @@
-import { execSync } from 'child_process';
 import { readdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { transformSync } from 'esbuild';
+import { build as viteBuild, createServer } from 'vite';
 
-const required = ['VITE_GOOGLE_API_KEY', 'VITE_GOOGLE_CLIENT_ID'];
-const missing = required.filter((key) => !process.env[key]);
+// These values are public in the generated browser bundle. Keep the API key
+// restricted to the deployed site's HTTP referrer and the Google Drive API.
+const GOOGLE_API_KEY = 'AIzaSyD9IhFBHBHEs729edMO7LsoKZFlTfsnv5U';
+const GOOGLE_CLIENT_ID = '967365398072-sj6mjo1r3pdg18frmdl5aoafnvbbsfob.apps.googleusercontent.com';
+
+const missing = [
+  ['GOOGLE_API_KEY', GOOGLE_API_KEY],
+  ['GOOGLE_CLIENT_ID', GOOGLE_CLIENT_ID],
+].filter(([, value]) => !value).map(([name]) => name);
 if (missing.length) {
-  console.error(`Missing required env vars: ${missing.join(', ')}`);
+  console.error(
+    `Missing Google build credentials: ${missing.join(', ')}. ` +
+    'Fill the hardcoded constants at the top of scripts/build.js.'
+  );
   process.exit(1);
 }
 
-// Embed build timestamp so the app can display when it was built
-process.env.VITE_BUILD_TIME = new Date().toISOString();
+const viteOptions = {
+  define: {
+    __GOOGLE_API_KEY__: JSON.stringify(GOOGLE_API_KEY),
+    __GOOGLE_CLIENT_ID__: JSON.stringify(GOOGLE_CLIENT_ID),
+    __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
+  },
+};
 
-// Run vite build to output to docs
-execSync('vite build', { stdio: 'inherit' });
+if (process.argv.includes('--dev')) {
+  const server = await createServer(viteOptions);
+  await server.listen();
+  server.printUrls();
+} else {
+  // Run vite build to output to docs
+  await viteBuild(viteOptions);
 
-// Replace placeholder env variable names in built JS files with real values
-const assetsDir = join('docs', 'assets');
-const files = readdirSync(assetsDir).filter((f) => f.endsWith('.js'));
+  const assetsDir = join('docs', 'assets');
+  const files = readdirSync(assetsDir).filter((f) => f.endsWith('.js'));
 
-// Minify vendor chunk while keeping app code readable
-const vendorFile = files.find((f) => f.startsWith('vendor'));
-if (vendorFile) {
-  const vendorPath = join(assetsDir, vendorFile);
-  const minified = transformSync(readFileSync(vendorPath, 'utf8'), { minify: true });
-  writeFileSync(vendorPath, minified.code);
-}
-
-for (const file of files) {
-  const fullPath = join(assetsDir, file);
-  let code = readFileSync(fullPath, 'utf8');
-  code = code
-    .replace(/VITE_GOOGLE_API_KEY/g, process.env.VITE_GOOGLE_API_KEY)
-    .replace(/VITE_GOOGLE_CLIENT_ID/g, process.env.VITE_GOOGLE_CLIENT_ID);
-  writeFileSync(fullPath, code);
+  // Minify vendor chunk while keeping app code readable
+  const vendorFile = files.find((f) => f.startsWith('vendor'));
+  if (vendorFile) {
+    const vendorPath = join(assetsDir, vendorFile);
+    const minified = transformSync(readFileSync(vendorPath, 'utf8'), { minify: true });
+    writeFileSync(vendorPath, minified.code);
+  }
 }

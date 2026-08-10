@@ -78,13 +78,13 @@ export default function App() {
   const [jsonOpen, setJsonOpen] = useState(false);
   const [closePortfolioOpen, setClosePortfolioOpen] = useState(false);
 
-  const driveApiKey = import.meta.env.VITE_GOOGLE_API_KEY;
-  const driveClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+  const driveApiKey = __GOOGLE_API_KEY__;
+  const driveClientId = __GOOGLE_CLIENT_ID__;
   const driveConfigured = Boolean(driveApiKey && driveClientId);
   const [driveAvailable, setDriveAvailable] = useState(driveConfigured);
 
   const builtAgo = useMemo(() => {
-    const timestamp = import.meta.env.VITE_BUILD_TIME;
+    const timestamp = __BUILD_TIME__;
     if (!timestamp) return null;
     const difference = Date.now() - new Date(timestamp).getTime();
     const formatter = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
