@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   assetValue,
   concentrationRows,
+  defaultAssetTypes,
   defaultDimensions,
   mergeStrategy,
   planCashTransfers,
@@ -72,7 +73,7 @@ test('recommendSurplusCash does not worsen a hard maximum', () => {
     dimensionPolicies: {
       asset_type: {
         mode: 'limits',
-        categories: { stock: { max: 40 }, bond: { max: 100 } },
+        categories: { stock: { max: 40 }, bond: { min: 50 } },
       },
     },
   });
@@ -85,6 +86,143 @@ test('recommendSurplusCash does not worsen a hard maximum', () => {
   const recommendation = recommendSurplusCash(assets, strategy, {}, defaultDimensions);
   assert.equal(recommendation.plan.some((item) => item.assetId === 'stock'), false);
   assert.equal(Math.round(recommendation.plan.find((item) => item.assetId === 'bond').amount), 40);
+});
+
+test('recommendSurplusCash fairly balances normalized target deviations and retains useful cash', () => {
+  const strategy = mergeStrategy({
+    dimensionPolicies: {
+      asset_type: {
+        mode: 'target',
+        tolerance: 0,
+        importance: 3,
+        categories: {
+          real_estate: { target: 20 },
+          stock: { target: 20 },
+          bond: { target: 20 },
+          commodity: { target: 20 },
+          crypto: { target: 4 },
+          cash: { target: 16 },
+        },
+      },
+    },
+  });
+  const assets = [
+    { id: 'checking', name: 'Checking', type: 'cash', portfolioScope: 'investable', value: 76.7, ownershipShare: 100, isCheckingAccount: true },
+    { id: 'investment-cash', name: 'Investment cash', type: 'cash', portfolioScope: 'financial', value: 0, ownershipShare: 100, isInvestmentCashAccount: true },
+    { id: 'real-estate', name: 'Real estate', type: 'real_estate', portfolioScope: 'financial', value: 75, ownershipShare: 100 },
+    { id: 'stock', name: 'Stock', type: 'stock', portfolioScope: 'financial', value: 6, ownershipShare: 100, eligibleForInvestment: true },
+    { id: 'bond', name: 'Bond', type: 'bond', portfolioScope: 'financial', value: 0, ownershipShare: 100, eligibleForInvestment: true },
+    { id: 'commodity', name: 'Commodity', type: 'commodity', portfolioScope: 'financial', value: 19, ownershipShare: 100, eligibleForInvestment: true },
+    { id: 'crypto', name: 'Crypto', type: 'crypto', portfolioScope: 'financial', value: 0, ownershipShare: 100, eligibleForInvestment: true },
+  ];
+
+  const recommendation = recommendSurplusCash(assets, strategy, defaultAssetTypes, defaultDimensions);
+  const projected = Object.fromEntries(
+    concentrationRows(assets, 'asset_type', strategy.dimensionPolicies.asset_type, defaultAssetTypes, defaultDimensions, recommendation.projectedValues, 'financial')
+      .map((row) => [row.category, row.current]),
+  );
+
+  assert.ok(projected.cash > 11 && projected.cash < 13);
+  assert.ok(projected.stock > 13 && projected.stock < 15);
+  assert.ok(projected.bond > 13 && projected.bond < 15);
+  assert.ok(projected.commodity > 13 && projected.commodity < 15);
+  assert.ok(projected.crypto > 3.5 && projected.crypto < 4);
+  assert.ok(Math.abs(projected.stock - projected.bond) < 0.1);
+  assert.ok(Math.abs(projected.stock - projected.commodity) < 0.1);
+  assert.ok(recommendation.unallocated > 20);
+  assert.ok(recommendation.unresolvedRules.some((rule) => rule.category === 'real_estate' && rule.status === 'Over target'));
+});
+
+test('recommendSurplusCash evaluates all configured dimensions and ignores candidate row order', () => {
+  const strategy = mergeStrategy({
+    dimensionPolicies: {
+      asset_type: {
+        mode: 'target',
+        tolerance: 0,
+        importance: 3,
+        categories: { stock: { target: 100 } },
+      },
+      geography: {
+        mode: 'target',
+        tolerance: 0,
+        importance: 2,
+        categories: { europe: { target: 50 }, north_america: { target: 50 } },
+      },
+    },
+  });
+  const fixedAssets = [
+    { id: 'checking', name: 'Checking', type: 'cash', portfolioScope: 'investable', value: 100, ownershipShare: 100, isCheckingAccount: true },
+    { id: 'investment-cash', name: 'Investment cash', type: 'cash', portfolioScope: 'financial', value: 0, ownershipShare: 100, isInvestmentCashAccount: true },
+  ];
+  const candidates = [
+    { id: 'europe', name: 'Europe ETF', type: 'stock', portfolioScope: 'financial', value: 0, ownershipShare: 100, eligibleForInvestment: true, dimensions: { geography: { europe: 100 } } },
+    { id: 'north-america', name: 'North America ETF', type: 'stock', portfolioScope: 'financial', value: 0, ownershipShare: 100, eligibleForInvestment: true, dimensions: { geography: { north_america: 100 } } },
+  ];
+
+  const forward = recommendSurplusCash([...fixedAssets, ...candidates], strategy, defaultAssetTypes, defaultDimensions);
+  const reversed = recommendSurplusCash([...fixedAssets, ...candidates].reverse(), strategy, defaultAssetTypes, defaultDimensions);
+  const forwardPlan = Object.fromEntries(forward.plan.map((item) => [item.assetId, item.amount]));
+  const reversedPlan = Object.fromEntries(reversed.plan.map((item) => [item.assetId, item.amount]));
+
+  assert.ok(Math.abs(forwardPlan.europe - 50) < 0.1);
+  assert.ok(Math.abs(forwardPlan['north-america'] - 50) < 0.1);
+  assert.ok(Math.abs(forwardPlan.europe - reversedPlan.europe) < 0.01);
+  assert.ok(Math.abs(forwardPlan['north-america'] - reversedPlan['north-america']) < 0.01);
+});
+
+test('recommendSurplusCash uses dimension importance to resolve conflicting targets', () => {
+  const strategy = mergeStrategy({
+    dimensionPolicies: {
+      asset_type: {
+        mode: 'target',
+        tolerance: 0,
+        importance: 3,
+        categories: { stock: { target: 100 } },
+      },
+      geography: {
+        mode: 'target',
+        tolerance: 0,
+        importance: 1,
+        categories: { north_america: { target: 100 } },
+      },
+    },
+  });
+  const assets = [
+    { id: 'checking', name: 'Checking', type: 'cash', portfolioScope: 'investable', value: 100, ownershipShare: 100, isCheckingAccount: true },
+    { id: 'investment-cash', name: 'Investment cash', type: 'cash', portfolioScope: 'financial', value: 0, ownershipShare: 100, isInvestmentCashAccount: true },
+    { id: 'stock-europe', name: 'Europe Stock', type: 'stock', portfolioScope: 'financial', value: 0, ownershipShare: 100, eligibleForInvestment: true, dimensions: { geography: { europe: 100 } } },
+    { id: 'bond-north-america', name: 'North America Bond', type: 'bond', portfolioScope: 'financial', value: 0, ownershipShare: 100, eligibleForInvestment: true, dimensions: { geography: { north_america: 100 } } },
+  ];
+
+  const recommendation = recommendSurplusCash(assets, strategy, defaultAssetTypes, defaultDimensions);
+  const plan = Object.fromEntries(recommendation.plan.map((item) => [item.assetId, item.amount]));
+
+  assert.ok(Math.abs(plan['stock-europe'] - 75) < 0.1);
+  assert.ok(Math.abs(plan['bond-north-america'] - 25) < 0.1);
+});
+
+test('recommendSurplusCash does not force a purchase when retaining cash is equally compliant', () => {
+  const strategy = mergeStrategy({
+    dimensionPolicies: {
+      asset_type: {
+        mode: 'target',
+        tolerance: 10,
+        importance: 3,
+        categories: { stock: { target: 100 } },
+      },
+    },
+  });
+  const assets = [
+    { id: 'checking', name: 'Checking', type: 'cash', portfolioScope: 'investable', value: 10, ownershipShare: 100, isCheckingAccount: true },
+    { id: 'investment-cash', name: 'Investment cash', type: 'cash', portfolioScope: 'financial', value: 0, ownershipShare: 100, isInvestmentCashAccount: true },
+    { id: 'stock', name: 'Stock ETF', type: 'stock', portfolioScope: 'financial', value: 100, ownershipShare: 100, eligibleForInvestment: true },
+  ];
+
+  const recommendation = recommendSurplusCash(assets, strategy, defaultAssetTypes, defaultDimensions);
+
+  assert.deepEqual(recommendation.plan, []);
+  assert.equal(Math.round(recommendation.unallocated), 10);
+  assert.match(recommendation.reason, /remains in the investment cash account/);
 });
 
 test('planCashTransfers replenishes account reserves before funding investment cash', () => {

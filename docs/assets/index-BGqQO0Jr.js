@@ -418,36 +418,191 @@ function concentrationRows(assets, key, policy = {}, assetTypes = {}, dimensions
     };
   });
 }
-function strategyPenalty(assets, strategy, assetTypes, dimensions, valueOverrides) {
-  let penalty = 0;
-  let activePolicies = 0;
+function configuredPercentage(value) {
+  if (value === "" || value == null) return null;
+  const percentage = Number(value);
+  return Number.isFinite(percentage) ? percentage : null;
+}
+function createStrategyEvaluator(assets, strategy, assetTypes, dimensions, currentValues) {
+  const policies = [];
   for (const [key, policy] of Object.entries(strategy?.dimensionPolicies || {})) {
     if (policy.mode !== "target" && policy.mode !== "limits") continue;
-    activePolicies += 1;
-    const importance = Math.max(0.1, Number(policy.importance) || 1);
-    for (const row of concentrationRows(assets, key, policy, assetTypes, dimensions, valueOverrides, "financial")) {
-      if (policy.mode === "target" && row.target != null) {
-        penalty += Math.max(0, Math.abs(row.current - row.target) - (Number(policy.tolerance) || 0)) * importance;
-      } else if (policy.mode === "limits") {
-        if (row.min != null) penalty += Math.max(0, row.min - row.current) * importance;
-        if (row.max != null) penalty += Math.max(0, row.current - row.max) * importance;
+    const categories = policy.categories || {};
+    const configuredCategories = Object.entries(categories).filter(([, config]) => policy.mode === "target" ? configuredPercentage(config.target) != null : configuredPercentage(config.min) != null || configuredPercentage(config.max) != null);
+    if (!configuredCategories.length) continue;
+    const currentRows = new Map(
+      concentrationRows(assets, key, policy, assetTypes, dimensions, currentValues, "financial").map((row) => [row.category, row])
+    );
+    policies.push({
+      key,
+      policy,
+      configuredCategories,
+      currentRows,
+      importance: Math.max(0.1, Number(policy.importance) || 1)
+    });
+  }
+  function evaluate(valueOverrides, investedFraction = 0) {
+    let maximumWorsening = 0;
+    let limitViolation = 0;
+    let targetDeviation = 0;
+    for (const configuredPolicy of policies) {
+      const { key, policy, configuredCategories, currentRows, importance } = configuredPolicy;
+      const projectedRows = new Map(
+        concentrationRows(assets, key, policy, assetTypes, dimensions, valueOverrides, "financial").map((row) => [row.category, row])
+      );
+      let policyMaximumWorsening = 0;
+      let policyLimitViolation = 0;
+      let policyTargetDeviation = 0;
+      for (const [category, config] of configuredCategories) {
+        const current = currentRows.get(category)?.current || 0;
+        const projected = projectedRows.get(category)?.current || 0;
+        if (policy.mode === "target") {
+          const target = configuredPercentage(config.target);
+          const tolerance = Math.max(0, Number(policy.tolerance) || 0);
+          const deviation = Math.max(0, Math.abs(projected - target) - tolerance);
+          const scale = Math.max(1, Math.abs(target), tolerance);
+          policyTargetDeviation += (deviation / scale) ** 2;
+          continue;
+        }
+        const minimum = configuredPercentage(config.min);
+        const maximum = configuredPercentage(config.max);
+        if (minimum != null) {
+          const violation = Math.max(0, minimum - projected) / Math.max(1, Math.abs(minimum));
+          policyLimitViolation += violation ** 2;
+        }
+        if (maximum != null) {
+          const projectedExcess = Math.max(0, projected - maximum);
+          const currentExcess = Math.max(0, current - maximum);
+          const scale = Math.max(1, Math.abs(maximum));
+          policyLimitViolation += (projectedExcess / scale) ** 2;
+          policyMaximumWorsening += (Math.max(0, projectedExcess - currentExcess) / scale) ** 2;
+        }
+      }
+      const categoryCount = configuredCategories.length;
+      maximumWorsening += importance * policyMaximumWorsening / categoryCount;
+      limitViolation += importance * policyLimitViolation / categoryCount;
+      targetDeviation += importance * policyTargetDeviation / categoryCount;
+    }
+    return { maximumWorsening, limitViolation, targetDeviation, investedFraction };
+  }
+  return { activePolicies: policies.length, evaluate };
+}
+const strategyScoreKeys = ["maximumWorsening", "limitViolation", "targetDeviation", "investedFraction"];
+function compareStrategyScores(left, right) {
+  for (const key of strategyScoreKeys) {
+    const scale = Math.max(1, Math.abs(left[key]), Math.abs(right[key]));
+    const tolerance = scale * 1e-10;
+    if (left[key] < right[key] - tolerance) return -1;
+    if (left[key] > right[key] + tolerance) return 1;
+  }
+  return 0;
+}
+function optimizeSurplusAllocation(candidates, routing, evaluator) {
+  const surplus = routing.transferableSurplus;
+  const investmentCash = routing.investmentCashAccount;
+  const destinations = [
+    investmentCash,
+    ...[...candidates].sort((left, right) => `${left.id}\0${left.name}`.localeCompare(`${right.id}\0${right.name}`))
+  ];
+  const baseValues = { ...routing.projectedValues };
+  baseValues[investmentCash.id] = Math.max(0, (baseValues[investmentCash.id] || 0) - surplus);
+  const allocations = destinations.map((_, index) => index === 0 ? surplus : 0);
+  function projectedValues(nextAllocations) {
+    const values = { ...baseValues };
+    for (let index = 0; index < destinations.length; index += 1) {
+      const destination = destinations[index];
+      values[destination.id] = (values[destination.id] || 0) + nextAllocations[index];
+    }
+    return values;
+  }
+  function allocationScore(nextAllocations) {
+    const invested = Math.max(0, surplus - nextAllocations[0]);
+    return evaluator.evaluate(projectedValues(nextAllocations), surplus > 0 ? invested / surplus : 0);
+  }
+  let score = allocationScore(allocations);
+  const amountPrecision = Math.max(5e-3, surplus * 1e-8);
+  const goldenRatio = (Math.sqrt(5) - 1) / 2;
+  for (let sweep = 0; sweep < 16; sweep += 1) {
+    let largestChange = 0;
+    for (let leftIndex = 0; leftIndex < destinations.length - 1; leftIndex += 1) {
+      for (let rightIndex = leftIndex + 1; rightIndex < destinations.length; rightIndex += 1) {
+        let evaluateSplit = function(leftAmount) {
+          const trial = [...allocations];
+          trial[leftIndex] = Math.max(0, Math.min(pairTotal, leftAmount));
+          trial[rightIndex] = pairTotal - trial[leftIndex];
+          const trialScore = allocationScore(trial);
+          if (compareStrategyScores(trialScore, bestScore) < 0) {
+            bestLeft = trial[leftIndex];
+            bestScore = trialScore;
+          }
+          return trialScore;
+        };
+        const pairTotal = allocations[leftIndex] + allocations[rightIndex];
+        if (pairTotal <= amountPrecision) continue;
+        const currentLeft = allocations[leftIndex];
+        let bestLeft = currentLeft;
+        let bestScore = score;
+        evaluateSplit(0);
+        evaluateSplit(pairTotal);
+        let low = 0;
+        let high = pairTotal;
+        let first = high - goldenRatio * (high - low);
+        let second = low + goldenRatio * (high - low);
+        let firstScore = evaluateSplit(first);
+        let secondScore = evaluateSplit(second);
+        for (let iteration = 0; iteration < 32 && high - low > amountPrecision; iteration += 1) {
+          if (compareStrategyScores(firstScore, secondScore) <= 0) {
+            high = second;
+            second = first;
+            secondScore = firstScore;
+            first = high - goldenRatio * (high - low);
+            firstScore = evaluateSplit(first);
+          } else {
+            low = first;
+            first = second;
+            firstScore = secondScore;
+            second = low + goldenRatio * (high - low);
+            secondScore = evaluateSplit(second);
+          }
+        }
+        evaluateSplit((low + high) / 2);
+        if (Math.abs(bestLeft - currentLeft) <= amountPrecision || compareStrategyScores(bestScore, score) >= 0) continue;
+        allocations[leftIndex] = bestLeft;
+        allocations[rightIndex] = pairTotal - bestLeft;
+        largestChange = Math.max(largestChange, Math.abs(bestLeft - currentLeft));
+        score = bestScore;
       }
     }
+    if (largestChange <= amountPrecision) break;
   }
-  return { penalty, activePolicies };
+  return {
+    allocations,
+    destinations,
+    projectedValues: projectedValues(allocations)
+  };
 }
-function worsensMaximumLimit(assets, strategy, assetTypes, dimensions, currentValues, trialValues) {
+function unresolvedStrategyRules(assets, strategy, assetTypes, dimensions, valueOverrides) {
+  const unresolved = [];
   for (const [key, policy] of Object.entries(strategy?.dimensionPolicies || {})) {
-    if (policy.mode !== "limits") continue;
-    const before = new Map(concentrationRows(assets, key, policy, assetTypes, dimensions, currentValues, "financial").map((row) => [row.category, row]));
-    const after = concentrationRows(assets, key, policy, assetTypes, dimensions, trialValues, "financial");
-    for (const row of after) {
-      if (row.max == null || row.current <= row.max + 1e-9) continue;
-      const previous = before.get(row.category)?.current || 0;
-      if (row.current > previous + 1e-9) return true;
+    if (policy.mode !== "target" && policy.mode !== "limits") continue;
+    const categories = policy.categories || {};
+    for (const row of concentrationRows(assets, key, policy, assetTypes, dimensions, valueOverrides, "financial")) {
+      const config = categories[row.category] || {};
+      const configured = policy.mode === "target" ? configuredPercentage(config.target) != null : configuredPercentage(config.min) != null || configuredPercentage(config.max) != null;
+      if (!configured || row.status === "On track") continue;
+      unresolved.push({
+        key,
+        category: row.category,
+        label: row.label,
+        status: row.status,
+        current: row.current,
+        target: row.target,
+        min: row.min,
+        max: row.max
+      });
     }
   }
-  return false;
+  return unresolved;
 }
 function proportionalFlows(sources, destinations, total, kind) {
   const sourceTotal = sources.reduce((sum, item) => sum + item.amount, 0);
@@ -602,6 +757,7 @@ function recommendSurplusCash(assets, strategy, assetTypes = {}, dimensions = {}
     currentMetrics: portfolioMetrics(activeAssets, [], initialValues),
     projectedMetrics: portfolioMetrics(activeAssets, [], routing.projectedValues),
     unallocated: 0,
+    unresolvedRules: [],
     reason: ""
   };
   if (routing.reserveShortfall > 0.01) {
@@ -619,42 +775,22 @@ function recommendSurplusCash(assets, strategy, assetTypes = {}, dimensions = {}
   if (!candidates.length) {
     result.reason = "No assets are marked as eligible for additional investment.";
     result.unallocated = routing.transferableSurplus;
+    result.unresolvedRules = unresolvedStrategyRules(activeAssets, strategy, assetTypes, dimensions, result.projectedValues);
     return result;
   }
-  const baseValues = { ...routing.projectedValues };
-  const configured = strategyPenalty(activeAssets, strategy, assetTypes, dimensions, baseValues).activePolicies;
-  if (!configured) {
+  const evaluator = createStrategyEvaluator(activeAssets, strategy, assetTypes, dimensions, initialValues);
+  if (!evaluator.activePolicies) {
     result.reason = "Configure at least one target allocation or limit to generate an investment plan.";
     result.unallocated = routing.transferableSurplus;
     return result;
   }
-  const allocations = Object.fromEntries(candidates.map((asset) => [asset.id, 0]));
-  const steps = 100;
-  const block = routing.transferableSurplus / steps;
-  const projected = { ...baseValues };
-  for (let index = 0; index < steps; index += 1) {
-    let best = null;
-    for (const candidate of candidates) {
-      const trial = {
-        ...projected,
-        [routing.investmentCashAccount.id]: Math.max(0, (projected[routing.investmentCashAccount.id] || 0) - block),
-        [candidate.id]: (projected[candidate.id] || 0) + block
-      };
-      if (worsensMaximumLimit(activeAssets, strategy, assetTypes, dimensions, projected, trial)) continue;
-      const score = strategyPenalty(activeAssets, strategy, assetTypes, dimensions, trial).penalty;
-      if (!best || score < best.score - 1e-9) best = { candidate, score };
-    }
-    if (!best) break;
-    projected[routing.investmentCashAccount.id] = Math.max(0, (projected[routing.investmentCashAccount.id] || 0) - block);
-    projected[best.candidate.id] = (projected[best.candidate.id] || 0) + block;
-    allocations[best.candidate.id] += block;
-  }
-  result.projectedValues = projected;
-  result.plan = candidates.filter((asset) => allocations[asset.id] > 5e-3).map((asset) => ({ assetId: asset.id, name: asset.name, amount: allocations[asset.id] })).sort((a, b) => b.amount - a.amount);
-  const allocatedTotal = Object.values(allocations).reduce((sum, amount) => sum + amount, 0);
-  result.unallocated = Math.max(0, routing.transferableSurplus - allocatedTotal);
+  const optimized = optimizeSurplusAllocation(candidates, routing, evaluator);
+  result.projectedValues = optimized.projectedValues;
+  result.plan = optimized.destinations.slice(1).map((asset, index) => ({ assetId: asset.id, name: asset.name, amount: optimized.allocations[index + 1] })).filter((item) => item.amount > 5e-3).sort((left, right) => right.amount - left.amount || left.name.localeCompare(right.name) || left.assetId.localeCompare(right.assetId));
+  result.unallocated = Math.max(0, optimized.allocations[0]);
   result.projectedMetrics = portfolioMetrics(activeAssets, [], result.projectedValues);
-  result.reason = result.plan.length ? result.unallocated > 0.01 ? "Part of the surplus cannot be allocated without exceeding a configured maximum." : "The surplus is distributed to reduce the weighted strategy deviations." : "No eligible investment can receive the surplus without exceeding a configured maximum.";
+  result.unresolvedRules = unresolvedStrategyRules(activeAssets, strategy, assetTypes, dimensions, result.projectedValues);
+  result.reason = result.plan.length ? result.unallocated > 0.01 ? "The recommendation improves the highest-priority strategy rules and retains the remainder when further purchases would not improve them." : "The surplus is distributed to minimize configured strategy violations across all active dimensions." : "The available cash remains in the investment cash account because no eligible purchase improves the configured strategy.";
   return result;
 }
 function groupByPeriod(points, mode) {
@@ -4453,9 +4589,9 @@ function SurplusPlan({ recommendation, assets, strategy, assetTypes, dimensions,
         /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-blue-300", children: formatCurrency(recommendation.projectedMetrics.financialPortfolio, currency) })
       ] })
     ] }),
-    recommendation.unallocated > 0.01 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "rounded-lg border border-amber-800 bg-amber-950/20 p-3 text-sm text-amber-300", children: [
+    recommendation.unallocated > 0.01 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "rounded-lg border border-blue-800 bg-blue-950/20 p-3 text-sm text-blue-200", children: [
       formatCurrency(recommendation.unallocated, currency),
-      " remains in the investment cash account because it cannot currently be allocated by the configured strategy."
+      " of the available surplus remains in the investment cash account. Guidance retains cash whenever no eligible purchase would improve the configured strategy."
     ] }),
     recommendation.plan.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { className: "text-sm font-medium", children: "Next investment" }),
@@ -4472,34 +4608,54 @@ function SurplusPlan({ recommendation, assets, strategy, assetTypes, dimensions,
           /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "py-2 text-right font-medium text-blue-300", children: formatCurrency(item.amount, currency) }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "py-2 text-right", children: formatCurrency(recommendation.projectedValues[item.assetId] || 0, currency) })
         ] }, item.assetId)) })
-      ] }) }),
-      effects.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { className: "text-sm font-medium mb-2", children: "Projected strategy effect" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "overflow-x-auto max-h-64", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("table", { className: "w-full text-xs", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("thead", { className: "text-zinc-500", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("th", { className: "text-left py-1", children: "Dimension" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("th", { className: "text-left py-1", children: "Category" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("th", { className: "text-right py-1", children: "Current" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("th", { className: "text-right py-1", children: "Projected" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("th", { className: "text-right py-1", children: "Target / limit" })
-          ] }) }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("tbody", { children: effects.map((effect) => /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { className: "border-t border-zinc-800", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "py-1", children: effect.dimension }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "py-1", children: effect.category }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("td", { className: "py-1 text-right", children: [
-              effect.current.toFixed(1),
-              "%"
-            ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("td", { className: "py-1 text-right", children: [
-              effect.projected.toFixed(1),
-              "%"
-            ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "py-1 text-right", children: effect.target != null ? `${effect.target}%` : `${effect.min ?? "—"}%–${effect.max ?? "—"}%` })
-          ] }, effect.key)) })
-        ] }) })
+      ] }) })
+    ] }),
+    effects.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { className: "text-sm font-medium mb-2", children: "Projected strategy effect" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "overflow-x-auto max-h-64", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("table", { className: "w-full text-xs", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("thead", { className: "text-zinc-500", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("th", { className: "text-left py-1", children: "Dimension" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("th", { className: "text-left py-1", children: "Category" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("th", { className: "text-right py-1", children: "Current" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("th", { className: "text-right py-1", children: "Projected" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("th", { className: "text-right py-1", children: "Target / limit" })
+        ] }) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("tbody", { children: effects.map((effect) => /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { className: "border-t border-zinc-800", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "py-1", children: effect.dimension }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "py-1", children: effect.category }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("td", { className: "py-1 text-right", children: [
+            effect.current.toFixed(1),
+            "%"
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("td", { className: "py-1 text-right", children: [
+            effect.projected.toFixed(1),
+            "%"
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "py-1 text-right", children: effect.target != null ? `${effect.target}%` : `${effect.min ?? "—"}%–${effect.max ?? "—"}%` })
+        ] }, effect.key)) })
+      ] }) })
+    ] }),
+    (recommendation.unresolvedRules || []).length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "rounded-lg border border-amber-800 bg-amber-950/20 p-3 text-sm text-amber-200", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { children: [
+        recommendation.unresolvedRules.length,
+        " configured strategy ",
+        recommendation.unresolvedRules.length === 1 ? "rule remains" : "rules remain",
+        " outside target tolerance or limits after this buy-only plan. Existing positions, eligible destinations, or conflicting rules may prevent full compliance."
       ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-zinc-500", children: "Advisory only. After executing the transfers and purchases, record the resulting balances and holdings in the next portfolio update." })
-    ] })
+      /* @__PURE__ */ jsxRuntimeExports.jsx("ul", { className: "mt-2 space-y-1 text-xs text-amber-100", children: recommendation.unresolvedRules.map((rule) => /* @__PURE__ */ jsxRuntimeExports.jsxs("li", { children: [
+        dimensionName(rule.key, dimensions),
+        " · ",
+        rule.label,
+        ": ",
+        rule.status,
+        " at ",
+        rule.current.toFixed(1),
+        "% (",
+        rule.target != null ? `target ${rule.target}%` : [rule.min != null ? `minimum ${rule.min}%` : "", rule.max != null ? `maximum ${rule.max}%` : ""].filter(Boolean).join(", "),
+        ")"
+      ] }, `${rule.key}:${rule.category}`)) })
+    ] }),
+    (recommendation.transfers.length > 0 || recommendation.plan.length > 0) && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-zinc-500", children: "Advisory only. After executing the transfers and purchases, record the resulting balances and holdings in the next portfolio update." })
   ] });
 }
 const DB_NAME = "portfolio-tracker-db";
@@ -5641,7 +5797,7 @@ function useSnapshots({ assets, setAssets, liabilities, setLiabilities, assetTyp
     handleRestoreSnapshot
   };
 }
-const version = "1.0.85";
+const version = "1.0.86";
 const pkg = {
   version
 };
@@ -5678,7 +5834,7 @@ function App() {
   const driveConfigured = Boolean(driveClientId);
   const [driveAvailable, setDriveAvailable] = reactExports.useState(driveConfigured);
   const builtAgo = reactExports.useMemo(() => {
-    const timestamp = "2026-08-10T23:42:41.210Z";
+    const timestamp = "2026-08-11T00:59:32.744Z";
     const difference = Date.now() - new Date(timestamp).getTime();
     const formatter = new Intl.RelativeTimeFormat(void 0, { numeric: "auto" });
     const seconds = Math.floor(difference / 1e3);

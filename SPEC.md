@@ -1,4 +1,4 @@
-# Portfolio Strategy Tracker — Specification v0.11
+# Portfolio Strategy Tracker — Specification v0.12
 
 ## 1. Purpose
 
@@ -204,11 +204,16 @@ The recommendation engine must:
 4. Replenish any remaining reserve deficit from the single designated Financial investment cash account.
 5. Report a remaining reserve shortfall without recommending asset sales when available cash is insufficient.
 6. Transfer checking cash above the fully funded reserve to the investment cash destination, proportionally across source-account excesses.
-7. Consider only existing Financial assets marked eligible for additional investment.
-8. Respect configured hard maximums.
-9. Score projected holdings against active target and limit policies.
-10. Allocate transferred investment cash to reduce weighted deviations.
-11. Explain each reserve assignment, cash transfer, investment, and unallocated amount.
+7. Consider only existing Financial assets marked eligible for additional investment, while treating retained investment cash as a valid final destination.
+8. Evaluate each possible purchase by its complete exposure across every active target and minimum/maximum dimension; Informational and Disabled dimensions do not influence guidance.
+9. Give any avoidable worsening of a configured maximum priority over all other objectives. When a maximum is already violated, purchases must reduce or preserve that violation whenever a non-worsening allocation is possible.
+10. Give remaining minimum/maximum violations priority over target deviations. A rule has no penalty while it is within its configured range.
+11. Score target deviations only outside the configured tolerance, square normalized deviations so larger relative gaps receive greater marginal priority, average category scores within each dimension, and apply the dimension's configured importance.
+12. Optimize all eligible destinations and retained investment cash together. Results must not depend on asset row order, and split classifications must influence every dimension they affect.
+13. Prefer retaining investment cash when an additional purchase would not improve the prioritized strategy score. Guidance must not force allocation merely because cash is available.
+14. Explain each reserve assignment, cash transfer, investment, intentionally retained amount, and rule that remains outside tolerance or limits after the buy-only plan.
+
+Target and limit rules can conflict or be impossible to reach using purchases alone because of existing overweight positions, unavailable eligible destinations, or overlapping dimension exposures. When full compliance is infeasible, the engine returns the best non-worsening compromise under the priority order above and identifies the remaining unresolved rules instead of implying that every target can be reached.
 
 Recommendation output includes:
 
@@ -222,7 +227,8 @@ Recommendation output includes:
 - Recommended amount per eligible asset.
 - Current and projected Financial Portfolio value.
 - Current and projected rule effects.
-- Unallocated cash and the limiting reason, when applicable.
+- Cash intentionally retained in the investment cash account and the reason, when applicable.
+- Count and details of configured rules that remain outside tolerance or limits after the projected buy-only plan.
 
 An internal transfer from checking cash to a Financial asset does not change Total Assets, Investable Assets, or Total Net Worth. The dashboard therefore does not present an unchanged “Investable Assets after transfer” comparison.
 
@@ -302,3 +308,4 @@ The implementation is complete when the user can:
 14. Pass the full automated test suite and credentialed production build.
 15. Export the complete current in-memory portfolio as encrypted or readable JSON, then import either format without overwriting a backing file until an explicit Save.
 16. Save, make another portfolio edit, and save again without the second edit being ignored by dirty-state tracking.
+17. Receive deterministic portfolio-wide guidance that balances all active strategy dimensions, prioritizes limits, fairly reduces normalized target deviations, and retains investment cash when no eligible purchase improves the result.

@@ -118,8 +118,8 @@ export default function SurplusPlan({ recommendation, assets, strategy, assetTyp
         <div>{formatCurrency(recommendation.currentMetrics.financialPortfolio, currency)} → <span className="text-blue-300">{formatCurrency(recommendation.projectedMetrics.financialPortfolio, currency)}</span></div>
       </div>
       {recommendation.unallocated > 0.01 && (
-        <div className="rounded-lg border border-amber-800 bg-amber-950/20 p-3 text-sm text-amber-300">
-          {formatCurrency(recommendation.unallocated, currency)} remains in the investment cash account because it cannot currently be allocated by the configured strategy.
+        <div className="rounded-lg border border-blue-800 bg-blue-950/20 p-3 text-sm text-blue-200">
+          {formatCurrency(recommendation.unallocated, currency)} of the available surplus remains in the investment cash account. Guidance retains cash whenever no eligible purchase would improve the configured strategy.
         </div>
       )}
 
@@ -148,40 +148,58 @@ export default function SurplusPlan({ recommendation, assets, strategy, assetTyp
               </tbody>
             </table>
           </div>
-
-          {effects.length > 0 && (
-            <div>
-              <h3 className="text-sm font-medium mb-2">Projected strategy effect</h3>
-              <div className="overflow-x-auto max-h-64">
-                <table className="w-full text-xs">
-                  <thead className="text-zinc-500">
-                    <tr>
-                      <th className="text-left py-1">Dimension</th>
-                      <th className="text-left py-1">Category</th>
-                      <th className="text-right py-1">Current</th>
-                      <th className="text-right py-1">Projected</th>
-                      <th className="text-right py-1">Target / limit</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {effects.map((effect) => (
-                      <tr key={effect.key} className="border-t border-zinc-800">
-                        <td className="py-1">{effect.dimension}</td>
-                        <td className="py-1">{effect.category}</td>
-                        <td className="py-1 text-right">{effect.current.toFixed(1)}%</td>
-                        <td className="py-1 text-right">{effect.projected.toFixed(1)}%</td>
-                        <td className="py-1 text-right">
-                          {effect.target != null ? `${effect.target}%` : `${effect.min ?? "—"}%–${effect.max ?? "—"}%`}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-          <p className="text-xs text-zinc-500">Advisory only. After executing the transfers and purchases, record the resulting balances and holdings in the next portfolio update.</p>
         </>
+      )}
+
+      {effects.length > 0 && (
+        <div>
+          <h3 className="text-sm font-medium mb-2">Projected strategy effect</h3>
+          <div className="overflow-x-auto max-h-64">
+            <table className="w-full text-xs">
+              <thead className="text-zinc-500">
+                <tr>
+                  <th className="text-left py-1">Dimension</th>
+                  <th className="text-left py-1">Category</th>
+                  <th className="text-right py-1">Current</th>
+                  <th className="text-right py-1">Projected</th>
+                  <th className="text-right py-1">Target / limit</th>
+                </tr>
+              </thead>
+              <tbody>
+                {effects.map((effect) => (
+                  <tr key={effect.key} className="border-t border-zinc-800">
+                    <td className="py-1">{effect.dimension}</td>
+                    <td className="py-1">{effect.category}</td>
+                    <td className="py-1 text-right">{effect.current.toFixed(1)}%</td>
+                    <td className="py-1 text-right">{effect.projected.toFixed(1)}%</td>
+                    <td className="py-1 text-right">
+                      {effect.target != null ? `${effect.target}%` : `${effect.min ?? "—"}%–${effect.max ?? "—"}%`}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {(recommendation.unresolvedRules || []).length > 0 && (
+        <div className="rounded-lg border border-amber-800 bg-amber-950/20 p-3 text-sm text-amber-200">
+          <p>{recommendation.unresolvedRules.length} configured strategy {recommendation.unresolvedRules.length === 1 ? "rule remains" : "rules remain"} outside target tolerance or limits after this buy-only plan. Existing positions, eligible destinations, or conflicting rules may prevent full compliance.</p>
+          <ul className="mt-2 space-y-1 text-xs text-amber-100">
+            {recommendation.unresolvedRules.map((rule) => (
+              <li key={`${rule.key}:${rule.category}`}>
+                {dimensionName(rule.key, dimensions)} · {rule.label}: {rule.status} at {rule.current.toFixed(1)}% ({rule.target != null
+                  ? `target ${rule.target}%`
+                  : [rule.min != null ? `minimum ${rule.min}%` : "", rule.max != null ? `maximum ${rule.max}%` : ""].filter(Boolean).join(", ")})
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {(recommendation.transfers.length > 0 || recommendation.plan.length > 0) && (
+        <p className="text-xs text-zinc-500">Advisory only. After executing the transfers and purchases, record the resulting balances and holdings in the next portfolio update.</p>
       )}
     </div>
   );

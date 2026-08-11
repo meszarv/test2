@@ -84,3 +84,12 @@ This plan refocuses the application on rule-based investment of surplus cash plu
 - [x] Reproduce the save → edit → save regression with a hook-level test.
 - [x] Keep load/import dirty suppression while ensuring a successful save cannot suppress the next real edit.
 - [x] Rebuild the production site with the repeated-save fix.
+
+## Milestone 9 — Portfolio-wide strategy optimization
+
+- [x] Replace order-dependent fixed-block allocation with deterministic optimization across eligible investments and retained investment cash.
+- [x] Evaluate the complete projected exposure across every active target and minimum/maximum dimension.
+- [x] Prioritize avoidable maximum worsening, then remaining limit violations, then importance-weighted squared normalized target deviations outside tolerance.
+- [x] Prefer retained investment cash when no additional eligible purchase improves the configured strategy.
+- [x] Report projected rule effects and unresolved rules for buy-only plans that cannot fully satisfy the strategy.
+- [x] Cover fair target balancing, multi-dimension allocation, candidate-order independence, limit priority, and intentional cash retention with automated tests.
