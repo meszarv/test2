@@ -497,16 +497,16 @@ function compareStrategyScores(left, right) {
   }
   return 0;
 }
-function optimizeSurplusAllocation(candidates, routing, evaluator) {
-  const surplus = routing.transferableSurplus;
+function optimizeInvestmentCashAllocation(candidates, routing, evaluator) {
   const investmentCash = routing.investmentCashAccount;
+  const availableCash = Math.max(0, Number(routing.projectedValues[investmentCash.id]) || 0);
   const destinations = [
     investmentCash,
     ...[...candidates].sort((left, right) => `${left.id}\0${left.name}`.localeCompare(`${right.id}\0${right.name}`))
   ];
   const baseValues = { ...routing.projectedValues };
-  baseValues[investmentCash.id] = Math.max(0, (baseValues[investmentCash.id] || 0) - surplus);
-  const allocations = destinations.map((_, index) => index === 0 ? surplus : 0);
+  baseValues[investmentCash.id] = 0;
+  const allocations = destinations.map((_, index) => index === 0 ? availableCash : 0);
   function projectedValues(nextAllocations) {
     const values = { ...baseValues };
     for (let index = 0; index < destinations.length; index += 1) {
@@ -516,11 +516,11 @@ function optimizeSurplusAllocation(candidates, routing, evaluator) {
     return values;
   }
   function allocationScore(nextAllocations) {
-    const invested = Math.max(0, surplus - nextAllocations[0]);
-    return evaluator.evaluate(projectedValues(nextAllocations), surplus > 0 ? invested / surplus : 0);
+    const invested = Math.max(0, availableCash - nextAllocations[0]);
+    return evaluator.evaluate(projectedValues(nextAllocations), availableCash > 0 ? invested / availableCash : 0);
   }
   let score = allocationScore(allocations);
-  const amountPrecision = Math.max(5e-3, surplus * 1e-8);
+  const amountPrecision = Math.max(5e-3, availableCash * 1e-8);
   const goldenRatio = (Math.sqrt(5) - 1) / 2;
   for (let sweep = 0; sweep < 16; sweep += 1) {
     let largestChange = 0;
@@ -749,6 +749,7 @@ function recommendSurplusCash(assets, strategy, assetTypes = {}, dimensions = {}
   const routing = planCashTransfers(activeAssets, strategy);
   const candidates = activeAssets.filter((asset) => asset.portfolioScope === "financial" && asset.eligibleForInvestment && !asset.isCheckingAccount && !asset.isInvestmentCashAccount);
   const initialValues = Object.fromEntries(activeAssets.map((asset) => [asset.id, assetValue(asset)]));
+  const availableToInvest = routing.reserveShortfall <= 0.01 && routing.investmentCashAccount ? Math.max(0, Number(routing.projectedValues[routing.investmentCashAccount.id]) || 0) : 0;
   const result = {
     ...routing,
     plan: [],
@@ -756,6 +757,7 @@ function recommendSurplusCash(assets, strategy, assetTypes = {}, dimensions = {}
     projectedValues: { ...routing.projectedValues },
     currentMetrics: portfolioMetrics(activeAssets, [], initialValues),
     projectedMetrics: portfolioMetrics(activeAssets, [], routing.projectedValues),
+    availableToInvest,
     unallocated: 0,
     unresolvedRules: [],
     reason: ""
@@ -768,29 +770,29 @@ function recommendSurplusCash(assets, strategy, assetTypes = {}, dimensions = {}
     result.reason = routing.reason;
     return result;
   }
-  if (routing.transferableSurplus <= 0.01) {
+  if (availableToInvest <= 0.01) {
     result.reason = routing.reason;
     return result;
   }
   if (!candidates.length) {
     result.reason = "No assets are marked as eligible for additional investment.";
-    result.unallocated = routing.transferableSurplus;
+    result.unallocated = availableToInvest;
     result.unresolvedRules = unresolvedStrategyRules(activeAssets, strategy, assetTypes, dimensions, result.projectedValues);
     return result;
   }
   const evaluator = createStrategyEvaluator(activeAssets, strategy, assetTypes, dimensions, initialValues);
   if (!evaluator.activePolicies) {
     result.reason = "Configure at least one target allocation or limit to generate an investment plan.";
-    result.unallocated = routing.transferableSurplus;
+    result.unallocated = availableToInvest;
     return result;
   }
-  const optimized = optimizeSurplusAllocation(candidates, routing, evaluator);
+  const optimized = optimizeInvestmentCashAllocation(candidates, routing, evaluator);
   result.projectedValues = optimized.projectedValues;
   result.plan = optimized.destinations.slice(1).map((asset, index) => ({ assetId: asset.id, name: asset.name, amount: optimized.allocations[index + 1] })).filter((item) => item.amount > 5e-3).sort((left, right) => right.amount - left.amount || left.name.localeCompare(right.name) || left.assetId.localeCompare(right.assetId));
   result.unallocated = Math.max(0, optimized.allocations[0]);
   result.projectedMetrics = portfolioMetrics(activeAssets, [], result.projectedValues);
   result.unresolvedRules = unresolvedStrategyRules(activeAssets, strategy, assetTypes, dimensions, result.projectedValues);
-  result.reason = result.plan.length ? result.unallocated > 0.01 ? "The recommendation improves the highest-priority strategy rules and retains the remainder when further purchases would not improve them." : "The surplus is distributed to minimize configured strategy violations across all active dimensions." : "The available cash remains in the investment cash account because no eligible purchase improves the configured strategy.";
+  result.reason = result.plan.length ? result.unallocated > 0.01 ? "The recommendation improves the highest-priority strategy rules and retains the remainder when further purchases would not improve them." : "The available investment cash is distributed to minimize configured strategy violations across all active dimensions." : "The available cash remains in the investment cash account because no eligible purchase improves the configured strategy.";
   return result;
 }
 function groupByPeriod(points, mode) {
@@ -4538,9 +4540,9 @@ function SurplusPlan({ recommendation, assets, strategy, assetTypes, dimensions,
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-zinc-500", children: "Reserve shortfall" }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: `text-lg font-medium ${recommendation.reserveShortfall > 0.01 ? "text-amber-300" : ""}`, children: formatCurrency(recommendation.reserveShortfall, currency) })
       ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: `rounded-xl border p-3 ${recommendation.surplus > 0.01 ? "border-blue-700 bg-blue-950/20" : "border-zinc-800"}`, children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-zinc-500", children: "Available to invest" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-lg font-medium", children: formatCurrency(recommendation.surplus, currency) })
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: `rounded-xl border p-3 ${recommendation.availableToInvest > 0.01 ? "border-blue-700 bg-blue-950/20" : "border-zinc-800"}`, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-zinc-500", children: "Investment cash available" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-lg font-medium", children: formatCurrency(recommendation.availableToInvest, currency) })
       ] })
     ] }),
     (recommendation.warnings || []).map((warning) => /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "rounded-lg border border-amber-800 bg-amber-950/20 p-3 text-sm text-amber-300", children: warning }, warning)),
@@ -4591,7 +4593,7 @@ function SurplusPlan({ recommendation, assets, strategy, assetTypes, dimensions,
     ] }),
     recommendation.unallocated > 0.01 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "rounded-lg border border-blue-800 bg-blue-950/20 p-3 text-sm text-blue-200", children: [
       formatCurrency(recommendation.unallocated, currency),
-      " of the available surplus remains in the investment cash account. Guidance retains cash whenever no eligible purchase would improve the configured strategy."
+      " remains in the investment cash account. Guidance retains cash whenever no eligible purchase would improve the configured strategy."
     ] }),
     recommendation.plan.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { className: "text-sm font-medium", children: "Next investment" }),
@@ -5797,7 +5799,7 @@ function useSnapshots({ assets, setAssets, liabilities, setLiabilities, assetTyp
     handleRestoreSnapshot
   };
 }
-const version = "1.0.86";
+const version = "1.0.87";
 const pkg = {
   version
 };
@@ -5834,7 +5836,7 @@ function App() {
   const driveConfigured = Boolean(driveClientId);
   const [driveAvailable, setDriveAvailable] = reactExports.useState(driveConfigured);
   const builtAgo = reactExports.useMemo(() => {
-    const timestamp = "2026-08-11T00:59:32.744Z";
+    const timestamp = "2026-08-13T21:20:04.050Z";
     const difference = Date.now() - new Date(timestamp).getTime();
     const formatter = new Intl.RelativeTimeFormat(void 0, { numeric: "auto" });
     const seconds = Math.floor(difference / 1e3);

@@ -1,4 +1,4 @@
-# Portfolio Strategy Tracker — Specification v0.12
+# Portfolio Strategy Tracker — Specification v0.13
 
 ## 1. Purpose
 
@@ -39,7 +39,7 @@ Only one check-in may exist per calendar month. Check-ins do not record external
 
 Explicit per-account reserves are assigned first. Any remainder of the global cash-reserve target is divided equally among checking accounts without an explicit amount.
 
-Guidance first replenishes checking accounts below their assigned reserve. It uses excess from other checking accounts and then the designated investment cash account. Only after every assigned reserve is funded may remaining checking cash be transferred to investment cash and allocated among eligible investments without worsening configured maximum limits.
+Guidance first replenishes checking accounts below their assigned reserve. It uses excess from other checking accounts and then the designated investment cash account. Only after every assigned reserve is funded may remaining checking cash be transferred to investment cash. The complete post-reserve balance of the investment cash account—its existing snapshot balance plus any new transfers—is then available for allocation among eligible investments. Guidance retains only the portion justified by the configured strategy.
 
 The recommendation is advisory. After acting on it, the user records the resulting balances and holdings in the next state update.
 
@@ -204,14 +204,15 @@ The recommendation engine must:
 4. Replenish any remaining reserve deficit from the single designated Financial investment cash account.
 5. Report a remaining reserve shortfall without recommending asset sales when available cash is insufficient.
 6. Transfer checking cash above the fully funded reserve to the investment cash destination, proportionally across source-account excesses.
-7. Consider only existing Financial assets marked eligible for additional investment, while treating retained investment cash as a valid final destination.
-8. Evaluate each possible purchase by its complete exposure across every active target and minimum/maximum dimension; Informational and Disabled dimensions do not influence guidance.
-9. Give any avoidable worsening of a configured maximum priority over all other objectives. When a maximum is already violated, purchases must reduce or preserve that violation whenever a non-worsening allocation is possible.
-10. Give remaining minimum/maximum violations priority over target deviations. A rule has no penalty while it is within its configured range.
-11. Score target deviations only outside the configured tolerance, square normalized deviations so larger relative gaps receive greater marginal priority, average category scores within each dimension, and apply the dimension's configured importance.
-12. Optimize all eligible destinations and retained investment cash together. Results must not depend on asset row order, and split classifications must influence every dimension they affect.
-13. Prefer retaining investment cash when an additional purchase would not improve the prioritized strategy score. Guidance must not force allocation merely because cash is available.
-14. Explain each reserve assignment, cash transfer, investment, intentionally retained amount, and rule that remains outside tolerance or limits after the buy-only plan.
+7. Treat the designated investment cash account's complete balance after reserve replenishment and checking-account transfers as available for allocation, including cash already present in the snapshot.
+8. Consider only existing Financial assets marked eligible for additional investment, while treating retained investment cash as a valid final destination. An investment-cash balance is not protected merely because it predates the current checking-account surplus.
+9. Evaluate each possible purchase by its complete exposure across every active target and minimum/maximum dimension; Informational and Disabled dimensions do not influence guidance.
+10. Give any avoidable worsening of a configured maximum priority over all other objectives. When a maximum is already violated, purchases must reduce or preserve that violation whenever a non-worsening allocation is possible.
+11. Give remaining minimum/maximum violations priority over target deviations. A rule has no penalty while it is within its configured range.
+12. Score target deviations only outside the configured tolerance, square normalized deviations so larger relative gaps receive greater marginal priority, average category scores within each dimension, and apply the dimension's configured importance.
+13. Optimize all eligible destinations and retained investment cash together. Results must not depend on asset row order, and split classifications must influence every dimension they affect.
+14. Prefer retaining investment cash when an additional purchase would not improve the prioritized strategy score. Guidance must not force allocation merely because cash is available. Conversely, when a Target allocation dimension assigns 100% to non-cash categories and no target to cash, the optimizer should allocate all usable investment cash when eligible purchases can improve that target.
+15. Explain each reserve assignment, cash transfer, investment, intentionally retained amount, and rule that remains outside tolerance or limits after the buy-only plan.
 
 Target and limit rules can conflict or be impossible to reach using purchases alone because of existing overweight positions, unavailable eligible destinations, or overlapping dimension exposures. When full compliance is infeasible, the engine returns the best non-worsening compromise under the priority order above and identifies the remaining unresolved rules instead of implying that every target can be reached.
 
@@ -223,7 +224,7 @@ Recommendation output includes:
 - Checking-to-checking and investment-cash-to-checking replenishment transfers.
 - Checking-to-investment-cash surplus transfers by source account.
 - Remaining reserve shortfall.
-- Amount available to invest.
+- Complete post-reserve investment-cash balance available for allocation, including its existing snapshot balance and new checking-account transfers.
 - Recommended amount per eligible asset.
 - Current and projected Financial Portfolio value.
 - Current and projected rule effects.
@@ -309,3 +310,4 @@ The implementation is complete when the user can:
 15. Export the complete current in-memory portfolio as encrypted or readable JSON, then import either format without overwriting a backing file until an explicit Save.
 16. Save, make another portfolio edit, and save again without the second edit being ignored by dirty-state tracking.
 17. Receive deterministic portfolio-wide guidance that balances all active strategy dimensions, prioritizes limits, fairly reduces normalized target deviations, and retains investment cash when no eligible purchase improves the result.
+18. Include investment cash already recorded in the snapshot in allocation guidance, investing it when appropriate and retaining only the strategy-justified balance.

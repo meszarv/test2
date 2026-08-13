@@ -44,9 +44,9 @@ export default function SurplusPlan({ recommendation, assets, strategy, assetTyp
           <div className="text-xs text-zinc-500">Reserve shortfall</div>
           <div className={`text-lg font-medium ${recommendation.reserveShortfall > 0.01 ? "text-amber-300" : ""}`}>{formatCurrency(recommendation.reserveShortfall, currency)}</div>
         </div>
-        <div className={`rounded-xl border p-3 ${recommendation.surplus > 0.01 ? "border-blue-700 bg-blue-950/20" : "border-zinc-800"}`}>
-          <div className="text-xs text-zinc-500">Available to invest</div>
-          <div className="text-lg font-medium">{formatCurrency(recommendation.surplus, currency)}</div>
+        <div className={`rounded-xl border p-3 ${recommendation.availableToInvest > 0.01 ? "border-blue-700 bg-blue-950/20" : "border-zinc-800"}`}>
+          <div className="text-xs text-zinc-500">Investment cash available</div>
+          <div className="text-lg font-medium">{formatCurrency(recommendation.availableToInvest, currency)}</div>
         </div>
       </div>
 
@@ -119,7 +119,7 @@ export default function SurplusPlan({ recommendation, assets, strategy, assetTyp
       </div>
       {recommendation.unallocated > 0.01 && (
         <div className="rounded-lg border border-blue-800 bg-blue-950/20 p-3 text-sm text-blue-200">
-          {formatCurrency(recommendation.unallocated, currency)} of the available surplus remains in the investment cash account. Guidance retains cash whenever no eligible purchase would improve the configured strategy.
+          {formatCurrency(recommendation.unallocated, currency)} remains in the investment cash account. Guidance retains cash whenever no eligible purchase would improve the configured strategy.
         </div>
       )}
 

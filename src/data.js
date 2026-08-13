@@ -524,16 +524,16 @@ function compareStrategyScores(left, right) {
   return 0;
 }
 
-function optimizeSurplusAllocation(candidates, routing, evaluator) {
-  const surplus = routing.transferableSurplus;
+function optimizeInvestmentCashAllocation(candidates, routing, evaluator) {
   const investmentCash = routing.investmentCashAccount;
+  const availableCash = Math.max(0, Number(routing.projectedValues[investmentCash.id]) || 0);
   const destinations = [
     investmentCash,
     ...[...candidates].sort((left, right) => `${left.id}\u0000${left.name}`.localeCompare(`${right.id}\u0000${right.name}`)),
   ];
   const baseValues = { ...routing.projectedValues };
-  baseValues[investmentCash.id] = Math.max(0, (baseValues[investmentCash.id] || 0) - surplus);
-  const allocations = destinations.map((_, index) => index === 0 ? surplus : 0);
+  baseValues[investmentCash.id] = 0;
+  const allocations = destinations.map((_, index) => index === 0 ? availableCash : 0);
 
   function projectedValues(nextAllocations) {
     const values = { ...baseValues };
@@ -545,12 +545,12 @@ function optimizeSurplusAllocation(candidates, routing, evaluator) {
   }
 
   function allocationScore(nextAllocations) {
-    const invested = Math.max(0, surplus - nextAllocations[0]);
-    return evaluator.evaluate(projectedValues(nextAllocations), surplus > 0 ? invested / surplus : 0);
+    const invested = Math.max(0, availableCash - nextAllocations[0]);
+    return evaluator.evaluate(projectedValues(nextAllocations), availableCash > 0 ? invested / availableCash : 0);
   }
 
   let score = allocationScore(allocations);
-  const amountPrecision = Math.max(0.005, surplus * 1e-8);
+  const amountPrecision = Math.max(0.005, availableCash * 1e-8);
   const goldenRatio = (Math.sqrt(5) - 1) / 2;
   for (let sweep = 0; sweep < 16; sweep += 1) {
     let largestChange = 0;
@@ -805,6 +805,9 @@ export function recommendSurplusCash(assets, strategy, assetTypes = {}, dimensio
   const routing = planCashTransfers(activeAssets, strategy);
   const candidates = activeAssets.filter((asset) => asset.portfolioScope === "financial" && asset.eligibleForInvestment && !asset.isCheckingAccount && !asset.isInvestmentCashAccount);
   const initialValues = Object.fromEntries(activeAssets.map((asset) => [asset.id, assetValue(asset)]));
+  const availableToInvest = routing.reserveShortfall <= 0.01 && routing.investmentCashAccount
+    ? Math.max(0, Number(routing.projectedValues[routing.investmentCashAccount.id]) || 0)
+    : 0;
   const result = {
     ...routing,
     plan: [],
@@ -812,6 +815,7 @@ export function recommendSurplusCash(assets, strategy, assetTypes = {}, dimensio
     projectedValues: { ...routing.projectedValues },
     currentMetrics: portfolioMetrics(activeAssets, [], initialValues),
     projectedMetrics: portfolioMetrics(activeAssets, [], routing.projectedValues),
+    availableToInvest,
     unallocated: 0,
     unresolvedRules: [],
     reason: "",
@@ -824,13 +828,13 @@ export function recommendSurplusCash(assets, strategy, assetTypes = {}, dimensio
     result.reason = routing.reason;
     return result;
   }
-  if (routing.transferableSurplus <= 0.01) {
+  if (availableToInvest <= 0.01) {
     result.reason = routing.reason;
     return result;
   }
   if (!candidates.length) {
     result.reason = "No assets are marked as eligible for additional investment.";
-    result.unallocated = routing.transferableSurplus;
+    result.unallocated = availableToInvest;
     result.unresolvedRules = unresolvedStrategyRules(activeAssets, strategy, assetTypes, dimensions, result.projectedValues);
     return result;
   }
@@ -838,11 +842,11 @@ export function recommendSurplusCash(assets, strategy, assetTypes = {}, dimensio
   const evaluator = createStrategyEvaluator(activeAssets, strategy, assetTypes, dimensions, initialValues);
   if (!evaluator.activePolicies) {
     result.reason = "Configure at least one target allocation or limit to generate an investment plan.";
-    result.unallocated = routing.transferableSurplus;
+    result.unallocated = availableToInvest;
     return result;
   }
 
-  const optimized = optimizeSurplusAllocation(candidates, routing, evaluator);
+  const optimized = optimizeInvestmentCashAllocation(candidates, routing, evaluator);
   result.projectedValues = optimized.projectedValues;
   result.plan = optimized.destinations
     .slice(1)
@@ -855,7 +859,7 @@ export function recommendSurplusCash(assets, strategy, assetTypes = {}, dimensio
   result.reason = result.plan.length
     ? result.unallocated > 0.01
       ? "The recommendation improves the highest-priority strategy rules and retains the remainder when further purchases would not improve them."
-      : "The surplus is distributed to minimize configured strategy violations across all active dimensions."
+      : "The available investment cash is distributed to minimize configured strategy violations across all active dimensions."
     : "The available cash remains in the investment cash account because no eligible purchase improves the configured strategy.";
   return result;
 }

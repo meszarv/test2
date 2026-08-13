@@ -65,6 +65,60 @@ test('recommendSurplusCash keeps the reserve and directs surplus toward target g
   assert.equal(Math.round(recommendation.currentMetrics.investableAssets), Math.round(recommendation.projectedMetrics.investableAssets));
   assert.equal(recommendation.currentMetrics.financialPortfolio, 40);
   assert.equal(Math.round(recommendation.projectedMetrics.financialPortfolio), 80);
+  assert.equal(Math.round(recommendation.availableToInvest), 40);
+});
+
+test('recommendSurplusCash invests existing investment cash when cash has no target allocation', () => {
+  const strategy = mergeStrategy({
+    cashReserveTarget: 20,
+    dimensionPolicies: {
+      asset_type: {
+        mode: 'target',
+        tolerance: 0,
+        importance: 3,
+        categories: { stock: { target: 100 } },
+      },
+    },
+  });
+  const assets = [
+    { id: 'checking', name: 'Checking', type: 'cash', portfolioScope: 'investable', value: 20, ownershipShare: 100, isCheckingAccount: true },
+    { id: 'investment-cash', name: 'Investment cash', type: 'cash', portfolioScope: 'financial', value: 40, ownershipShare: 100, isInvestmentCashAccount: true },
+    { id: 'stock', name: 'Stock ETF', type: 'stock', portfolioScope: 'financial', value: 60, ownershipShare: 100, eligibleForInvestment: true },
+  ];
+
+  const recommendation = recommendSurplusCash(assets, strategy, defaultAssetTypes, defaultDimensions);
+
+  assert.equal(recommendation.transferableSurplus, 0);
+  assert.equal(recommendation.availableToInvest, 40);
+  assert.equal(Math.round(recommendation.plan.find((item) => item.assetId === 'stock').amount), 40);
+  assert.equal(Math.round(recommendation.projectedValues['investment-cash']), 0);
+  assert.equal(Math.round(recommendation.projectedValues.stock), 100);
+});
+
+test('recommendSurplusCash retains only the existing investment cash justified by a cash target', () => {
+  const strategy = mergeStrategy({
+    cashReserveTarget: 20,
+    dimensionPolicies: {
+      asset_type: {
+        mode: 'target',
+        tolerance: 0,
+        importance: 3,
+        categories: { stock: { target: 75 }, cash: { target: 25 } },
+      },
+    },
+  });
+  const assets = [
+    { id: 'checking', name: 'Checking', type: 'cash', portfolioScope: 'investable', value: 20, ownershipShare: 100, isCheckingAccount: true },
+    { id: 'investment-cash', name: 'Investment cash', type: 'cash', portfolioScope: 'financial', value: 40, ownershipShare: 100, isInvestmentCashAccount: true },
+    { id: 'stock', name: 'Stock ETF', type: 'stock', portfolioScope: 'financial', value: 60, ownershipShare: 100, eligibleForInvestment: true },
+  ];
+
+  const recommendation = recommendSurplusCash(assets, strategy, defaultAssetTypes, defaultDimensions);
+
+  assert.ok(Math.abs(recommendation.plan.find((item) => item.assetId === 'stock').amount - 15) < 0.1);
+  assert.ok(Math.abs(recommendation.unallocated - 25) < 0.1);
+  assert.ok(Math.abs(recommendation.projectedValues['investment-cash'] - 25) < 0.1);
+  assert.ok(Math.abs(recommendation.projectedValues.stock - 75) < 0.1);
 });
 
 test('recommendSurplusCash does not worsen a hard maximum', () => {

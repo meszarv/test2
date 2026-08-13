@@ -32,6 +32,7 @@ test('SurplusPlan shows reserve assignments and ordered account transfers', () =
   assert.match(text, /Cash transfers — do these first/);
   assert.match(text, /Checking BChecking AReplenish reserve/);
   assert.match(text, /Checking BInvestment cashFund investment cash/);
+  assert.match(text, /Investment cash available€2,500/);
 });
 
 test('SurplusPlan explains retained cash and still shows the projected strategy effect', () => {

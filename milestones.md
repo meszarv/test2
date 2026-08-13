@@ -93,3 +93,10 @@ This plan refocuses the application on rule-based investment of surplus cash plu
 - [x] Prefer retained investment cash when no additional eligible purchase improves the configured strategy.
 - [x] Report projected rule effects and unresolved rules for buy-only plans that cannot fully satisfy the strategy.
 - [x] Cover fair target balancing, multi-dimension allocation, candidate-order independence, limit priority, and intentional cash retention with automated tests.
+
+## Milestone 10 — Existing investment-cash allocation
+
+- [x] Optimize the complete investment-cash balance after reserve routing instead of only newly transferred checking-account surplus.
+- [x] Invest existing snapshot cash when configured targets do not justify a cash allocation.
+- [x] Retain the amount required by an explicit cash target or other configured strategy rules.
+- [x] Show the complete allocatable investment-cash balance in Guidance and cover both full-investment and target-retention behavior with tests.
